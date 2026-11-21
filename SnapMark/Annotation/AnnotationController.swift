@@ -2,6 +2,21 @@ import AppKit
 
 /// 一次截图里的标注：当前工具与样式、标注文档、绘制中的图形、文字输入、属性条。
 /// 所有坐标为选区所在屏幕的本地 pt 坐标。
+/// 能承载标注的视图：标注画布挂在 `annotationHost`，文字输入框、属性条挂在 `controlsHost`。
+@MainActor
+protocol AnnotationHost: NSView {
+    var annotationHost: PassthroughView { get }
+    var controlsHost: PassthroughView { get }
+}
+
+/// 标注底下的原图：`bounds` 为原图铺满的范围（宿主本地 pt），`scale` 为像素 / pt。
+struct AnnotationSource {
+    let id: AnyHashable
+    let image: CGImage
+    let bounds: CGRect
+    let scale: CGFloat
+}
+
 @MainActor
 final class AnnotationController {
     /// 标注增删、撤销重做、工具或样式变化后回调（控制器据此锁定选区、刷新工具栏）。
@@ -17,7 +32,7 @@ final class AnnotationController {
     private let textEditor = TextEditingController()
 
     private var selection: CGRect = .zero
-    private var display: DisplayCapture?
+    private var source: AnnotationSource?
     private var mosaicSource: MosaicSource?
 
     // 选中已有图形再编辑
@@ -85,7 +100,7 @@ final class AnnotationController {
         textEditSnapshot = nil
         document.removeAll()
         mosaicSource = nil
-        display = nil
+        source = nil
         selection = .zero
         canvas.shapes = []
         canvas.inProgress = nil
@@ -97,13 +112,22 @@ final class AnnotationController {
 
     /// 把画布挂到选区所在屏幕，并同步选区。
     func attach(to view: OverlayView, display: DisplayCapture, selection: CGRect) {
-        if canvas.superview !== view.annotationHost {
-            canvas.frame = view.annotationHost.bounds
+        attach(to: view, source: AnnotationSource(
+            id: AnyHashable(display.displayID), image: display.image,
+            bounds: display.geometry.localBounds, scale: display.geometry.scale
+        ), selection: selection)
+    }
+
+    /// 把画布挂到任意宿主（遮罩、贴图窗口），`source` 是标注底下的原图（马赛克取样用）。
+    func attach(to view: AnnotationHost, source: AnnotationSource, selection: CGRect) {
+        let host = view.annotationHost
+        if canvas.superview !== host {
+            canvas.frame = host.bounds
             canvas.autoresizingMask = [.width, .height]
-            view.annotationHost.addSubview(canvas)
+            host.addSubview(canvas)
         }
-        if self.display?.displayID != display.displayID {
-            self.display = display
+        if self.source?.id != source.id {
+            self.source = source
             mosaicSource = nil
             canvas.environment = AnnotationEnvironment()
         }
@@ -114,6 +138,15 @@ final class AnnotationController {
     /// 属性条放在工具栏旁边；没有选中工具时隐藏。
     /// 选中已有图形时显示该图形的样式，修改作用于该图形。
     func layoutStylePanel(in view: OverlayView, toolbarFrame: CGRect, placement: ToolbarLayout.Placement) {
+        guard configureStylePanel(in: view.controlsHost) else { return }
+        let frame = ToolbarLayout.stylePanelFrame(size: stylePanel.frame.size, toolbar: toolbarFrame,
+                                                  placement: placement, bounds: view.bounds)
+        stylePanel.setFrameOrigin(frame.origin)
+    }
+
+    /// 把属性条放进 `host` 并按当前工具 / 选中图形配置。返回是否需要显示（位置由调用方决定）。
+    @discardableResult
+    func configureStylePanel(in host: NSView) -> Bool {
         let panelTool: AnnotationTool
         let panelStyle: ToolStyle
         if let tool {
@@ -124,16 +157,14 @@ final class AnnotationController {
             panelStyle = shape.style
         } else {
             stylePanel.isHidden = true
-            return
+            return false
         }
-        if stylePanel.superview !== view.controlsHost {
-            view.controlsHost.addSubview(stylePanel)
+        if stylePanel.superview !== host {
+            host.addSubview(stylePanel)
         }
         stylePanel.configure(tool: panelTool, style: panelStyle)
-        let frame = ToolbarLayout.stylePanelFrame(size: stylePanel.frame.size, toolbar: toolbarFrame,
-                                                  placement: placement, bounds: view.bounds)
-        stylePanel.setFrameOrigin(frame.origin)
         stylePanel.isHidden = false
+        return true
     }
 
     func hideStylePanel() {
@@ -168,7 +199,7 @@ final class AnnotationController {
         guard let tool, selection.contains(point), let style = currentStyle else { return false }
 
         if tool == .text {
-            if let host = canvas.superview?.superview as? OverlayView {
+            if let host = canvas.superview?.superview as? AnnotationHost {
                 textEditor.begin(at: point, in: host.controlsHost, selection: selection, style: style)
             }
             return true
@@ -288,7 +319,7 @@ final class AnnotationController {
     /// 双击文字：重新编辑。
     func reeditText(at point: CGPoint) -> Bool {
         guard tool == nil, let text = document.shape(at: point, tolerance: 4) as? TextShape,
-              let host = canvas.superview?.superview as? OverlayView else { return false }
+              let host = canvas.superview?.superview as? AnnotationHost else { return false }
         editDrag = nil
         textEditSnapshot = document.snapshot
         document.removeWithoutUndo(id: text.id)
@@ -376,11 +407,10 @@ final class AnnotationController {
     }
 
     private func prepareMosaicSource() {
-        guard mosaicSource == nil, let display else { return }
-        let source = MosaicSource(image: display.image, localBounds: display.geometry.localBounds,
-                                  scale: display.geometry.scale)
-        mosaicSource = source
-        canvas.environment = AnnotationEnvironment(mosaic: source)
+        guard mosaicSource == nil, let source else { return }
+        let mosaic = MosaicSource(image: source.image, localBounds: source.bounds, scale: source.scale)
+        mosaicSource = mosaic
+        canvas.environment = AnnotationEnvironment(mosaic: mosaic)
     }
 }
 

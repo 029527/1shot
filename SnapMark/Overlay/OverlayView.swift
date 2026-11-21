@@ -66,7 +66,7 @@ struct OverlayChrome: Equatable {
 /// 遮罩视图：定格画面 + 压暗（选区内保持原亮度）+ 选区描边 / 控制点 / 尺寸标签 + 放大镜。
 ///
 /// 除放大镜外都用 CALayer，拖动选区时只改 path 和 frame，不重绘整张图。
-final class OverlayView: NSView {
+final class OverlayView: NSView, AnnotationHost {
     weak var delegate: OverlayViewDelegate?
 
     static let dimAlpha: CGFloat = 0.4
@@ -365,6 +365,7 @@ enum KeyCode {
     static let returnKey: UInt16 = 36
     static let keypadEnter: UInt16 = 76
     static let c: UInt16 = 8
+    static let space: UInt16 = 49
     static let delete: UInt16 = 51
     static let forwardDelete: UInt16 = 117
     static let leftArrow: UInt16 = 123

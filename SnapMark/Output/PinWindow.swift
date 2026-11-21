@@ -70,7 +70,19 @@ final class PinWindow: NSPanel {
     var text: String?
     /// 原始尺寸（pt）。
     let originalSize: CGSize
-    private let pinView: PinView
+    let pinView: PinView
+    /// 编辑模式（空格打开）：第一次用到时创建。
+    private(set) var editor: PinEditor?
+
+    func toggleEditor() {
+        if editor == nil { editor = PinEditor(pin: self) }
+        editor?.toggleToolbar()
+    }
+
+    var isEditing: Bool { editor?.isToolbarVisible == true }
+
+    /// 原图 + 标注（没有标注时就是原图）。
+    var outputImage: CGImage { editor?.composedImage() ?? image }
 
     static let minZoom: CGFloat = 0.1
     static let maxZoom: CGFloat = 5
@@ -80,7 +92,7 @@ final class PinWindow: NSPanel {
     init(image: CGImage, frame: CGRect) {
         self.image = image
         originalSize = frame.size
-        pinView = PinView(frame: CGRect(origin: .zero, size: frame.size))
+        pinView = PinView(frame: CGRect(origin: .zero, size: frame.size), originalSize: frame.size)
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
 
         level = .floating
@@ -88,7 +100,8 @@ final class PinWindow: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
-        isMovableByWindowBackground = true
+        // 拖动由 PinView 自己处理（编辑模式下拖动是画图）。
+        isMovableByWindowBackground = false
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
         isFloatingPanel = true
@@ -101,15 +114,21 @@ final class PinWindow: NSPanel {
         initialFirstResponder = pinView
     }
 
-    /// Esc 关闭。
+    /// Esc：编辑中先逐级退出，否则关闭。
     override func cancelOperation(_ sender: Any?) {
-        close()
+        if let editor, editor.isToolbarVisible {
+            editor.escape()
+        } else {
+            close()
+        }
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
     override func close() {
+        editor?.teardown()
+        editor = nil
         super.close()
         onClose?()
         onClose = nil
@@ -129,6 +148,8 @@ final class PinWindow: NSPanel {
 
     /// 以 `anchor`（窗口内坐标）为中心缩放到 `newZoom`。
     func setZoom(_ newZoom: CGFloat, anchor: CGPoint? = nil) {
+        // 编辑时固定原始大小。
+        if isEditing, newZoom != 1 { return }
         let clamped = min(max(newZoom, Self.minZoom), Self.maxZoom)
         guard clamped != zoom else { return }
         let old = frame
@@ -145,12 +166,12 @@ final class PinWindow: NSPanel {
     // MARK: 动作
 
     @objc func copyImage(_ sender: Any?) {
-        if let text {
+        if let text, editor?.hasAnnotations != true {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
         } else {
-            PasteboardWriter.write(image)
+            PasteboardWriter.write(outputImage)
         }
         pinView.showZoomBadge("已复制")
     }
@@ -163,7 +184,8 @@ final class PinWindow: NSPanel {
         panel.allowedContentTypes = [ImageFormat.png.utType, ImageFormat.jpg.utType]
         panel.canCreateDirectories = true
         NSApp.activate()
-        panel.begin { [image] response in
+        let image = outputImage
+        panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             do {
                 try FileSaver.write(image, format: ImageFormat(fileExtension: url.pathExtension), to: url)
@@ -171,6 +193,10 @@ final class PinWindow: NSPanel {
                 NSAlert(error: error).runModal()
             }
         }
+    }
+
+    @objc func toggleEditorAction(_ sender: Any?) {
+        toggleEditor()
     }
 
     @objc func resetZoom(_ sender: Any?) {
@@ -196,7 +222,8 @@ final class PinWindow: NSPanel {
             item.target = self
             menu.addItem(item)
         }
-        add(text == nil ? "复制" : "复制文字", #selector(copyImage(_:)), "c")
+        add(text == nil || editor?.hasAnnotations == true ? "复制" : "复制文字", #selector(copyImage(_:)), "c")
+        add(isEditing ? "收起工具栏" : "编辑标注", #selector(toggleEditorAction(_:)), " ")
         add("另存为…", #selector(saveImage(_:)), "s")
         menu.addItem(.separator())
         add("原始大小", #selector(resetZoom(_:)), "0")
@@ -220,17 +247,26 @@ final class PinWindow: NSPanel {
     }
 }
 
-/// 贴图内容视图。
-final class PinView: NSView {
+/// 贴图内容视图。标注画布挂在 `annotationHost`（bounds 固定为原始尺寸，缩放时标注跟着缩放）。
+final class PinView: NSView, AnnotationHost {
     var image: CGImage?
     weak var pinWindow: PinWindow?
+    let originalSize: CGSize
 
+    let annotationHost = PassthroughView()
+    let controlsHost = PassthroughView()
     private let badge = NSTextField(labelWithString: "")
     private var badgeHide: DispatchWorkItem?
+    /// 本次按下由标注处理（之后的拖动 / 松开也交给标注）。
+    private var annotating = false
 
-    override init(frame frameRect: NSRect) {
+    init(frame frameRect: NSRect, originalSize: CGSize) {
+        self.originalSize = originalSize
         super.init(frame: frameRect)
         wantsLayer = true
+        for host in [annotationHost, controlsHost] {
+            addSubview(host)
+        }
         badge.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         badge.textColor = .white
         badge.alignment = .center
@@ -239,6 +275,7 @@ final class PinView: NSView {
         badge.layer?.cornerRadius = 4
         badge.isHidden = true
         addSubview(badge)
+        layoutHosts()
     }
 
     @available(*, unavailable)
@@ -246,10 +283,22 @@ final class PinView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        layoutHosts()
+    }
+
+    /// 两个宿主铺满视图；标注宿主的坐标系固定为原始尺寸。
+    private func layoutHosts() {
+        annotationHost.frame = bounds
+        annotationHost.bounds = CGRect(origin: .zero, size: originalSize)
+        controlsHost.frame = bounds
+    }
+
     override var isFlipped: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var acceptsFirstResponder: Bool { true }
-    override var mouseDownCanMoveWindow: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
         guard let image, let context = NSGraphicsContext.current?.cgContext else { return }
@@ -275,13 +324,58 @@ final class PinView: NSView {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
+    // MARK: 鼠标
+
+    /// 事件位置换算到标注坐标（原始尺寸）。
+    private func annotationPoint(_ event: NSEvent) -> CGPoint {
+        annotationHost.convert(event.locationInWindow, from: nil)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.activeAlways, .inVisibleRect, .mouseMoved, .cursorUpdate],
+                                       owner: self))
+    }
+
+    override func cursorUpdate(with event: NSEvent) { updateCursor() }
+    override func mouseMoved(with event: NSEvent) { updateCursor() }
+
+    func updateCursor() {
+        guard let window, let editor = pinWindow?.editor, editor.isToolbarVisible else {
+            NSCursor.arrow.set()
+            return
+        }
+        let location = annotationHost.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        editor.cursor(at: location).set()
+    }
+
     override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 {
+        window?.makeKey()
+        if let editor = pinWindow?.editor,
+           editor.mouseDown(at: annotationPoint(event), clickCount: event.clickCount, modifiers: event.modifierFlags) {
+            annotating = true
+            updateCursor()
+            return
+        }
+        annotating = false
+        if event.clickCount == 2, pinWindow?.isEditing != true {
             pinWindow?.close()
             return
         }
-        window?.makeKey()
         window?.performDrag(with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard annotating else { return }
+        pinWindow?.editor?.mouseDragged(to: annotationPoint(event), modifiers: event.modifierFlags)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard annotating else { return }
+        annotating = false
+        pinWindow?.editor?.mouseUp(at: annotationPoint(event), modifiers: event.modifierFlags)
+        updateCursor()
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -290,18 +384,29 @@ final class PinView: NSView {
     }
 
     override func scrollWheel(with event: NSEvent) {
-        guard let window = pinWindow else { return }
+        guard let window = pinWindow, !window.isEditing else { return }
         let delta = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY * 0.01 : event.scrollingDeltaY * 0.1
         guard delta != 0 else { return }
         window.setZoom(window.zoom * (1 + delta), anchor: convert(event.locationInWindow, from: nil))
     }
 
     override func magnify(with event: NSEvent) {
-        guard let window = pinWindow else { return }
+        guard let window = pinWindow, !window.isEditing else { return }
         window.setZoom(window.zoom * (1 + event.magnification), anchor: convert(event.locationInWindow, from: nil))
     }
 
+    // MARK: 键盘
+
     override func keyDown(with event: NSEvent) {
+        let plain = event.modifierFlags.isDisjoint(with: [.command, .control, .option])
+        // 空格：显示 / 隐藏工具栏。
+        if event.keyCode == KeyCode.space, plain {
+            pinWindow?.toggleEditor()
+            return
+        }
+        if let editor = pinWindow?.editor, editor.keyDown(event) {
+            return
+        }
         if event.keyCode == KeyCode.escape {
             pinWindow?.close()
             return
@@ -309,16 +414,27 @@ final class PinView: NSView {
         super.keyDown(with: event)
     }
 
+    override func flagsChanged(with event: NSEvent) {
+        pinWindow?.editor?.constrainChanged(event.modifierFlags.contains(.shift))
+        super.flagsChanged(with: event)
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // 正在输入文字时交给输入框（⌘C / ⌘Z 作用于文字）。
+        if window?.firstResponder is NSTextView { return super.performKeyEquivalent(with: event) }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard flags == .command, let key = event.charactersIgnoringModifiers?.lowercased() else {
+        guard flags.contains(.command), let key = event.charactersIgnoringModifiers?.lowercased() else {
             return super.performKeyEquivalent(with: event)
         }
-        switch key {
-        case "c": pinWindow?.copyImage(nil)
-        case "s": pinWindow?.saveImage(nil)
-        case "w": pinWindow?.close()
-        case "0": pinWindow?.resetZoom(nil)
+        let shift = flags.contains(.shift)
+        switch (key, shift) {
+        case ("c", false): pinWindow?.copyImage(nil)
+        case ("s", false): pinWindow?.saveImage(nil)
+        case ("w", false): pinWindow?.close()
+        case ("0", false): pinWindow?.resetZoom(nil)
+        case ("z", _):
+            guard let editor = pinWindow?.editor else { return false }
+            editor.undo(redo: shift)
         default: return super.performKeyEquivalent(with: event)
         }
         return true

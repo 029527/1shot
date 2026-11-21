@@ -157,6 +157,11 @@ final class ToolbarView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// 换一个按钮的悬停提示（同一个按钮在不同场景含义不同，比如贴图里的 ✕ 是关闭贴图）。
+    func setToolTip(_ toolTip: String, for item: ToolbarItem) {
+        buttons[item]?.toolTip = toolTip
+    }
+
     func setEnabled(_ enabled: Bool, for item: ToolbarItem) {
         buttons[item]?.isEnabled = enabled
     }
