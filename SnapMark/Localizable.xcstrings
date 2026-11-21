@@ -41,6 +41,22 @@
         }
       }
     },
+    "save-directory-name": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截图"
+          }
+        }
+      }
+    },
     "不透明度": {
       "localizations": {
         "en": {
@@ -157,6 +173,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keep screenshot history"
+          }
+        }
+      }
+    },
+    "像素化": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pixelate"
           }
         }
       }
@@ -357,6 +383,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Corner radius is a percentage of the shorter side, so larger screenshots get larger corners."
+          }
+        }
+      }
+    },
+    "圆角矩形": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rounded rectangle"
           }
         }
       }
@@ -641,6 +677,16 @@
         }
       }
     },
+    "强度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensity"
+          }
+        }
+      }
+    },
     "快捷键": {
       "localizations": {
         "en": {
@@ -881,6 +927,16 @@
         }
       }
     },
+    "最多 %@ 个字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to %@ characters"
+          }
+        }
+      }
+    },
     "权限": {
       "localizations": {
         "en": {
@@ -911,6 +967,16 @@
         }
       }
     },
+    "框选区域": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Area"
+          }
+        }
+      }
+    },
     "椭圆": {
       "localizations": {
         "en": {
@@ -921,12 +987,32 @@
         }
       }
     },
+    "模糊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blur"
+          }
+        }
+      }
+    },
     "橙色": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Orange"
+          }
+        }
+      }
+    },
+    "水印": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watermark"
           }
         }
       }
@@ -1027,6 +1113,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pen"
+          }
+        }
+      }
+    },
+    "画笔涂抹": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brush"
           }
         }
       }
@@ -1501,6 +1597,16 @@
         }
       }
     },
+    "高亮": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotlight"
+          }
+        }
+      }
+    },
     "黄色": {
       "localizations": {
         "en": {
@@ -1517,22 +1623,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Black"
-          }
-        }
-      }
-    },
-    "save-directory-name": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Screenshots"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "截图"
           }
         }
       }

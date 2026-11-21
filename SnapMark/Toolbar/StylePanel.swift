@@ -4,10 +4,15 @@ import AppKit
 protocol StylePanelDelegate: AnyObject {
     func stylePanel(_ panel: StylePanelView, didSelect size: SizeLevel)
     func stylePanel(_ panel: StylePanelView, didSelectColorAt index: Int)
+    func stylePanel(_ panel: StylePanelView, didChange options: ToolOptions)
 }
 
-/// 工具栏下方的属性条：3 档粗细（文字为 3 档字号）+ 8 个预设颜色。
-final class StylePanelView: NSView {
+/// 工具栏旁边的属性条，按工具显示不同的控件：
+/// - 普通工具：3 档粗细（文字为字号）+ 8 个颜色
+/// - 高亮：形状（矩形 / 椭圆 / 圆角矩形）+ 不透明度
+/// - 马赛克：效果（像素化 / 模糊）+ 方式（画笔 / 框选）+ 画笔粗细 + 强度
+/// - 水印：文字 + 不透明度 + 颜色
+final class StylePanelView: NSView, NSTextFieldDelegate {
     weak var delegate: StylePanelDelegate?
 
     static let itemSize: CGFloat = 26
@@ -15,7 +20,15 @@ final class StylePanelView: NSView {
 
     private var sizeButtons: [StyleButton] = []
     private var colorButtons: [StyleButton] = []
-    private let separator = NSView()
+    private var shapeButtons: [StyleButton] = []
+    private var effectButtons: [StyleButton] = []
+    private var modeButtons: [StyleButton] = []
+    private var separators: [NSView] = []
+
+    private let amountTitle = NSTextField(labelWithString: "")
+    private let amountSlider = NSSlider(value: 0.5, minValue: 0, maxValue: 1, target: nil, action: nil)
+    private let amountValue = NSTextField(labelWithString: "")
+    let textField = NSTextField(string: "")
 
     private(set) var tool: AnnotationTool = .rectangle
     private(set) var style = ToolStyle(size: .medium, colorIndex: 0)
@@ -34,26 +47,64 @@ final class StylePanelView: NSView {
             shadow.shadowOffset = CGSize(width: 0, height: -2)
             return shadow
         }()
+        // 属性条始终是浅色背景，控件也固定浅色外观。
+        appearance = NSAppearance(named: .aqua)
 
         for level in SizeLevel.allCases {
-            let button = StyleButton(kind: .size(level))
-            button.target = self
-            button.action = #selector(sizeClicked(_:))
-            sizeButtons.append(button)
-            addSubview(button)
+            sizeButtons.append(makeButton(.size(level), tag: level.rawValue, action: #selector(sizeClicked(_:))))
         }
-        separator.wantsLayer = true
-        separator.layer?.backgroundColor = NSColor(white: 0, alpha: 0.15).cgColor
-        addSubview(separator)
         for (index, color) in Palette.colors.enumerated() {
-            let button = StyleButton(kind: .color(color))
+            let button = makeButton(.color(color), tag: index, action: #selector(colorClicked(_:)))
             button.toolTip = Palette.names[index]
-            button.tag = index
-            button.target = self
-            button.action = #selector(colorClicked(_:))
             colorButtons.append(button)
-            addSubview(button)
         }
+        let shapes: [(String, String)] = [
+            ("rectangle", String(localized: "矩形")), ("circle", String(localized: "椭圆")),
+            ("app", String(localized: "圆角矩形")),
+        ]
+        for (index, (symbol, name)) in shapes.enumerated() {
+            let button = makeButton(.symbol(symbol), tag: index, action: #selector(shapeClicked(_:)))
+            button.toolTip = name
+            shapeButtons.append(button)
+        }
+        let effects: [(String, String)] = [
+            ("checkerboard.rectangle", String(localized: "像素化")), ("drop", String(localized: "模糊")),
+        ]
+        for (index, (symbol, name)) in effects.enumerated() {
+            let button = makeButton(.symbol(symbol), tag: index, action: #selector(effectClicked(_:)))
+            button.toolTip = name
+            effectButtons.append(button)
+        }
+        let modes: [(String, String)] = [
+            ("paintbrush.pointed", String(localized: "画笔涂抹")), ("rectangle.dashed", String(localized: "框选区域")),
+        ]
+        for (index, (symbol, name)) in modes.enumerated() {
+            let button = makeButton(.symbol(symbol), tag: index, action: #selector(modeClicked(_:)))
+            button.toolTip = name
+            modeButtons.append(button)
+        }
+
+        for label in [amountTitle, amountValue] {
+            label.font = .systemFont(ofSize: 12)
+            label.textColor = NSColor(white: 0.25, alpha: 1)
+            addSubview(label)
+        }
+        amountValue.alignment = .right
+        amountValue.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        amountSlider.controlSize = .small
+        amountSlider.isContinuous = true
+        amountSlider.target = self
+        amountSlider.action = #selector(amountChanged(_:))
+        addSubview(amountSlider)
+
+        textField.placeholderString = String(localized: "最多 \(String(WatermarkShape.maxLength)) 个字")
+        textField.font = .systemFont(ofSize: 12)
+        textField.bezelStyle = .roundedBezel
+        textField.controlSize = .small
+        textField.delegate = self
+        textField.focusRingType = .none
+        addSubview(textField)
+
         configure(tool: .rectangle, style: style)
     }
 
@@ -62,45 +113,182 @@ final class StylePanelView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    private func makeButton(_ kind: StyleButton.Kind, tag: Int, action: Selector) -> StyleButton {
+        let button = StyleButton(kind: kind)
+        button.tag = tag
+        button.target = self
+        button.action = action
+        addSubview(button)
+        return button
+    }
+
+    /// 水印文字框正在输入。
+    var isEditingText: Bool {
+        guard let editor = window?.firstResponder as? NSText else { return false }
+        return editor.delegate === textField
+    }
+
+    // MARK: 布局
+
     func configure(tool: AnnotationTool, style: ToolStyle) {
+        let toolChanged = tool != self.tool
         self.tool = tool
         self.style = style
+        let options = style.options
 
-        let sizeNames = tool == .text ? [String(localized: "小号字"), String(localized: "中号字"), String(localized: "大号字")] : [String(localized: "细"), String(localized: "中"), String(localized: "粗")]
         var x = Self.padding
-        for (index, button) in sizeButtons.enumerated() {
-            button.kind = .size(SizeLevel(rawValue: index)!)
-            button.isTextTool = tool == .text
-            button.toolTip = sizeNames[index]
-            button.isChosen = index == style.size.rawValue
-            button.frame = CGRect(x: x, y: Self.padding, width: Self.itemSize, height: Self.itemSize)
-            x += Self.itemSize
-        }
-
-        let showColors = tool.usesColor
-        separator.isHidden = !showColors
-        if showColors {
-            separator.frame = CGRect(x: x + 5, y: Self.padding + 5, width: 1, height: Self.itemSize - 10)
+        var separatorIndex = 0
+        func separator() {
+            if separatorIndex == separators.count {
+                let line = NSView()
+                line.wantsLayer = true
+                line.layer?.backgroundColor = NSColor(white: 0, alpha: 0.15).cgColor
+                addSubview(line)
+                separators.append(line)
+            }
+            let line = separators[separatorIndex]
+            line.isHidden = false
+            line.frame = CGRect(x: x + 5, y: Self.padding + 5, width: 1, height: Self.itemSize - 10)
+            separatorIndex += 1
             x += 11
         }
-        for (index, button) in colorButtons.enumerated() {
-            button.isHidden = !showColors
-            button.isChosen = index == style.colorIndex
-            if showColors {
+        func place(_ buttons: [StyleButton], visible: Bool, chosen: Int?) {
+            for button in buttons {
+                button.isHidden = !visible
+                guard visible else { continue }
+                button.isChosen = button.tag == chosen
                 button.frame = CGRect(x: x, y: Self.padding, width: Self.itemSize, height: Self.itemSize)
                 x += Self.itemSize
             }
         }
+        var groups = 0
+        func beginGroup() {
+            if groups > 0 { separator() }
+            groups += 1
+        }
+
+        // 水印文字
+        let showText = tool == .watermark
+        textField.isHidden = !showText
+        if showText {
+            beginGroup()
+            if toolChanged || !isEditingText { textField.stringValue = options.text }
+            textField.frame = CGRect(x: x + 2, y: Self.padding + 2, width: 150, height: Self.itemSize - 4)
+            x += 154
+        }
+
+        // 高亮形状
+        let showShapes = tool == .spotlight
+        if showShapes { beginGroup() }
+        place(shapeButtons, visible: showShapes, chosen: options.spotlightShape.rawValue)
+
+        // 马赛克效果、方式
+        let isMosaic = tool == .mosaic
+        if isMosaic { beginGroup() }
+        place(effectButtons, visible: isMosaic, chosen: options.mosaicEffect.rawValue)
+        if isMosaic { beginGroup() }
+        place(modeButtons, visible: isMosaic, chosen: options.mosaicMode.rawValue)
+
+        // 粗细 / 字号
+        let showSizes = tool.usesSize(options)
+        if showSizes { beginGroup() }
+        let sizeNames = tool == .text
+            ? [String(localized: "小号字"), String(localized: "中号字"), String(localized: "大号字")]
+            : [String(localized: "细"), String(localized: "中"), String(localized: "粗")]
+        for button in sizeButtons {
+            button.isTextTool = tool == .text
+            button.toolTip = sizeNames[button.tag]
+        }
+        place(sizeButtons, visible: showSizes, chosen: style.size.rawValue)
+
+        // 强度 / 不透明度
+        let amountName = tool.amountTitle
+        let showAmount = amountName != nil
+        for view in [amountTitle, amountSlider, amountValue] as [NSView] { view.isHidden = !showAmount }
+        if let amountName {
+            beginGroup()
+            amountTitle.stringValue = amountName
+            amountTitle.sizeToFit()
+            amountTitle.frame.origin = CGPoint(x: x + 4, y: (Self.itemSize + Self.padding * 2 - amountTitle.frame.height) / 2)
+            x += amountTitle.frame.width + 10
+            amountSlider.doubleValue = options.amount
+            amountSlider.frame = CGRect(x: x, y: Self.padding + 3, width: 110, height: Self.itemSize - 6)
+            x += 114
+            amountValue.stringValue = Self.percent(options.amount)
+            amountValue.frame = CGRect(x: x, y: amountTitle.frame.minY, width: 40, height: amountTitle.frame.height)
+            x += 44
+        }
+
+        // 颜色
+        let showColors = tool.usesColor
+        if showColors { beginGroup() }
+        place(colorButtons, visible: showColors, chosen: style.colorIndex)
+
+        for line in separators.dropFirst(separatorIndex) { line.isHidden = true }
         setFrameSize(CGSize(width: x + Self.padding, height: Self.itemSize + Self.padding * 2))
     }
 
+    static func percent(_ amount: Double) -> String {
+        "\(Int((amount * 100).rounded()))%"
+    }
+
+    // MARK: 动作
+
     @objc private func sizeClicked(_ sender: StyleButton) {
-        guard case .size(let level) = sender.kind else { return }
+        guard let level = SizeLevel(rawValue: sender.tag) else { return }
         delegate?.stylePanel(self, didSelect: level)
     }
 
     @objc private func colorClicked(_ sender: StyleButton) {
         delegate?.stylePanel(self, didSelectColorAt: sender.tag)
+    }
+
+    private func change(_ update: (inout ToolOptions) -> Void) {
+        var options = style.options
+        update(&options)
+        delegate?.stylePanel(self, didChange: options)
+    }
+
+    @objc private func shapeClicked(_ sender: StyleButton) {
+        change { $0.spotlightShape = SpotlightShapeKind(rawValue: sender.tag) ?? .rectangle }
+    }
+
+    @objc private func effectClicked(_ sender: StyleButton) {
+        change { $0.mosaicEffect = MosaicEffect(rawValue: sender.tag) ?? .pixelate }
+    }
+
+    @objc private func modeClicked(_ sender: StyleButton) {
+        change { $0.mosaicMode = MosaicMode(rawValue: sender.tag) ?? .brush }
+    }
+
+    @objc private func amountChanged(_ sender: NSSlider) {
+        // 按 5% 取整，数值更干净。
+        let value = (sender.doubleValue * 20).rounded() / 20
+        amountValue.stringValue = Self.percent(value)
+        change { $0.amount = value }
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        var text = textField.stringValue
+        if text.count > WatermarkShape.maxLength {
+            text = String(text.prefix(WatermarkShape.maxLength))
+            textField.stringValue = text
+        }
+        change { $0.text = text }
+    }
+
+    /// 回车：结束输入，把焦点还给画布。
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        if selector == #selector(NSResponder.insertNewline(_:)) || selector == #selector(NSResponder.cancelOperation(_:)) {
+            endEditing()
+            return true
+        }
+        return false
+    }
+
+    func endEditing() {
+        guard isEditingText else { return }
+        window?.makeFirstResponder(nil)
     }
 
     override func mouseDown(with event: NSEvent) {}
@@ -110,11 +298,12 @@ final class StylePanelView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-/// 属性条里的一个按钮：粗细圆点 / 字号 A / 颜色块。
+/// 属性条里的一个按钮：粗细圆点 / 字号 A / 颜色块 / 选项图标。
 final class StyleButton: NSButton {
     enum Kind {
         case size(SizeLevel)
         case color(PaletteColor)
+        case symbol(String)
     }
 
     var kind: Kind { didSet { needsDisplay = true } }
@@ -138,14 +327,19 @@ final class StyleButton: NSButton {
 
     override func draw(_ dirtyRect: NSRect) {
         let rect = bounds.insetBy(dx: 3, dy: 3)
-        if isChosen, case .size = kind {
+        let highlightsBackground: Bool
+        switch kind {
+        case .size, .symbol: highlightsBackground = true
+        case .color: highlightsBackground = false
+        }
+        if isChosen, highlightsBackground {
             OverlayView.accentColor.withAlphaComponent(0.15).setFill()
             NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
         }
+        let tint = isChosen ? OverlayView.accentColor : NSColor(white: 0.25, alpha: 1)
 
         switch kind {
         case .size(let level):
-            let tint = isChosen ? OverlayView.accentColor : NSColor(white: 0.25, alpha: 1)
             if isTextTool {
                 let size: CGFloat = [10, 13, 16][level.rawValue]
                 let string = NSAttributedString(string: "A", attributes: [
@@ -159,6 +353,15 @@ final class StyleButton: NSButton {
                 NSBezierPath(ovalIn: CGRect(x: bounds.midX - diameter / 2, y: bounds.midY - diameter / 2,
                                             width: diameter, height: diameter)).fill()
             }
+
+        case .symbol(let name):
+            let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+                .applying(.init(paletteColors: [tint]))
+            guard let image = NSImage(systemSymbolName: name, accessibilityDescription: toolTip)?
+                .withSymbolConfiguration(config) else { return }
+            let size = image.size
+            image.draw(in: CGRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2,
+                                  width: size.width, height: size.height))
 
         case .color(let color):
             let swatch = bounds.insetBy(dx: 6, dy: 6)

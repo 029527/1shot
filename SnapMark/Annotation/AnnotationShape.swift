@@ -21,6 +21,8 @@ struct PaletteColor: Equatable, Hashable {
 struct AnnotationEnvironment {
     /// 马赛克取样源（定格原图的像素化版本）。
     var mosaic: MosaicSource?
+    /// 选区（本地 pt）：高亮变暗、水印平铺的范围。
+    var bounds: CGRect = .zero
 }
 
 /// 一个标注图形。每个图形都是独立的数据对象，坐标为选区所在屏幕的**本地 pt 坐标**（y 向上）。
@@ -259,29 +261,84 @@ struct PenShape: AnnotationShape {
 // MARK: - 马赛克
 
 struct MosaicShape: AnnotationShape {
+    /// 涂抹轨迹，或框选的区域。
+    enum Region {
+        case stroke(points: [CGPoint], brushWidth: CGFloat)
+        case rect(CGRect)
+    }
+
     let id = UUID()
-    var points: [CGPoint]
-    /// 涂抹宽度（pt）。
-    var brushWidth: CGFloat
-    /// 像素块大小（pt）。
-    var blockSize: CGFloat
+    var region: Region
+    var effect: MosaicEffect
+    /// 0…1：像素块大小 / 模糊半径。
+    var amount: Double
+
+    init(region: Region, effect: MosaicEffect, amount: Double) {
+        self.region = region
+        self.effect = effect
+        self.amount = min(max(amount, 0), 1)
+    }
+
+    /// 画笔像素化（兼容旧接口）：`blockSize` 换算成强度。
+    init(points: [CGPoint], brushWidth: CGFloat, blockSize: CGFloat) {
+        self.init(region: .stroke(points: points, brushWidth: brushWidth), effect: .pixelate,
+                  amount: Double((blockSize - Self.minBlockSize) / Self.blockSizeRange))
+    }
+
+    static let minBlockSize: CGFloat = 4
+    static let blockSizeRange: CGFloat = 24
+    static let minBlurRadius: CGFloat = 2
+    static let blurRadiusRange: CGFloat = 18
+
+    /// 强度 → 像素块大小（pt）：4…28。
+    static func blockSize(amount: Double) -> CGFloat {
+        (minBlockSize + CGFloat(min(max(amount, 0), 1)) * blockSizeRange).rounded()
+    }
+
+    /// 强度 → 模糊半径（pt）：2…20。
+    static func blurRadius(amount: Double) -> CGFloat {
+        (minBlurRadius + CGFloat(min(max(amount, 0), 1)) * blurRadiusRange).rounded()
+    }
+
+    var blockSize: CGFloat { Self.blockSize(amount: amount) }
+    var blurRadius: CGFloat { Self.blurRadius(amount: amount) }
+
+    var points: [CGPoint] {
+        if case .stroke(let points, _) = region { return points }
+        return []
+    }
+
+    var brushWidth: CGFloat {
+        if case .stroke(_, let width) = region { return width }
+        return 0
+    }
 
     var bounds: CGRect {
-        PenShape(points: points, color: PaletteColor(0), lineWidth: brushWidth).bounds
+        switch region {
+        case .stroke(let points, let width): return PenShape(points: points, color: PaletteColor(0), lineWidth: width).bounds
+        case .rect(let rect): return rect
+        }
     }
 
     var maskPath: CGPath {
-        PenShape.smoothPath(points)
-            .copy(strokingWithWidth: brushWidth, lineCap: .round, lineJoin: .round, miterLimit: 10)
+        switch region {
+        case .stroke(let points, let width):
+            return PenShape.smoothPath(points)
+                .copy(strokingWithWidth: width, lineCap: .round, lineJoin: .round, miterLimit: 10)
+        case .rect(let rect):
+            return CGPath(rect: rect, transform: nil)
+        }
     }
 
     /// 从定格原图（而不是已画的标注）取样。
     func draw(in context: CGContext, environment: AnnotationEnvironment) {
-        guard let source = environment.mosaic, let image = source.pixelated(blockSize: blockSize) else { return }
+        guard let source = environment.mosaic else { return }
+        let image = effect == .pixelate ? source.pixelated(blockSize: blockSize) : source.blurred(radius: blurRadius)
+        guard let image else { return }
         context.saveGState()
         context.addPath(maskPath)
         context.clip()
-        context.interpolationQuality = .none
+        context.interpolationQuality = effect == .pixelate ? .none : .high
         context.draw(image, in: source.localBounds)
         context.restoreGState()
     }
@@ -289,6 +346,142 @@ struct MosaicShape: AnnotationShape {
     func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool {
         maskPath.copy(strokingWithWidth: tolerance * 2, lineCap: .round, lineJoin: .round, miterLimit: 10)
             .contains(point) || maskPath.contains(point)
+    }
+}
+
+// MARK: - 高亮（框外变暗）
+
+struct SpotlightShape: AnnotationShape {
+    let id = UUID()
+    var rect: CGRect
+    var kind: SpotlightShapeKind
+    /// 框外变暗的不透明度（0…1）。
+    var opacity: Double
+
+    var bounds: CGRect { rect.insetBy(dx: -2, dy: -2) }
+
+    var path: CGPath {
+        switch kind {
+        case .rectangle: return CGPath(rect: rect, transform: nil)
+        case .ellipse: return CGPath(ellipseIn: rect, transform: nil)
+        case .roundedRectangle:
+            let radius = min(12, min(rect.width, rect.height) / 2)
+            return CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        }
+    }
+
+    /// 单独画时（理论上不会，统一由 `AnnotationRenderer` 合并绘制）。
+    func draw(in context: CGContext, environment: AnnotationEnvironment) {
+        Self.drawDimming([self], in: context, bounds: environment.bounds)
+    }
+
+    /// 多个高亮合并：`bounds` 内整体变暗一次，所有高亮区域保持原样。不透明度取最大值。
+    static func drawDimming(_ spotlights: [SpotlightShape], in context: CGContext, bounds: CGRect) {
+        guard let opacity = spotlights.map(\.opacity).max(), opacity > 0, !bounds.isEmpty else { return }
+        context.saveGState()
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        context.setFillColor(CGColor(gray: 0, alpha: CGFloat(min(opacity, 1))))
+        context.fill(bounds)
+        context.setBlendMode(.clear)
+        for spotlight in spotlights {
+            context.addPath(spotlight.path)
+            context.fillPath()
+        }
+        context.endTransparencyLayer()
+        context.restoreGState()
+    }
+
+    /// 点在边框附近或区域内都算命中（区域内本来就是亮的，方便点中拖动）。
+    func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool {
+        path.contains(point) || strokeHit(path, lineWidth: 1, point: point, tolerance: tolerance)
+    }
+}
+
+// MARK: - 水印
+
+struct WatermarkShape: AnnotationShape {
+    static let maxLength = 16
+    static let fontSize: CGFloat = 16
+    static let angle: CGFloat = -.pi / 6
+
+    let id = UUID()
+    var text: String
+    var color: PaletteColor
+    var opacity: Double
+    /// 铺满的范围（选区 / 贴图）。
+    var area: CGRect
+
+    var bounds: CGRect { area }
+
+    var attributedText: NSAttributedString {
+        NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: Self.fontSize, weight: .medium),
+            .foregroundColor: color.nsColor.withAlphaComponent(CGFloat(min(max(opacity, 0), 1))),
+        ])
+    }
+
+    /// 斜向（-30°）平铺：行间错开半个间距。
+    func draw(in context: CGContext, environment: AnnotationEnvironment) {
+        guard !text.isEmpty, !area.isEmpty else { return }
+        let string = attributedText
+        let size = string.size()
+        let stepX = size.width + 56
+        let stepY = size.height + 48
+        // 旋转后要覆盖整个区域：以中心为原点，铺满对角线长度的范围。
+        let radius = hypot(area.width, area.height) / 2 + max(stepX, stepY)
+
+        context.saveGState()
+        context.clip(to: area)
+        context.translateBy(x: area.midX, y: area.midY)
+        context.rotate(by: Self.angle)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        var row = 0
+        var y = -radius
+        while y < radius {
+            var x = -radius + (row.isMultiple(of: 2) ? 0 : stepX / 2)
+            while x < radius {
+                string.draw(at: CGPoint(x: x, y: y))
+                x += stepX
+            }
+            y += stepY
+            row += 1
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        context.restoreGState()
+    }
+
+    /// 水印不参与点选（不挡住下面的图形），通过水印工具的属性条修改。
+    func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool { false }
+}
+
+// MARK: - 统一绘制
+
+enum AnnotationRenderer {
+    /// 分层绘制（层内保持添加顺序）：
+    /// 1. 马赛克（相当于改了原图内容）
+    /// 2. 高亮的变暗层（多个高亮合并，框外只暗一次，马赛克也一起变暗）
+    /// 3. 其他标注（箭头、文字等，不被压暗）
+    /// 4. 水印（最上层）
+    /// `environment.bounds` 为选区（变暗、水印的范围）。
+    static func draw(_ shapes: [any AnnotationShape], inProgress: (any AnnotationShape)? = nil,
+                     in context: CGContext, environment: AnnotationEnvironment, dirtyRect: CGRect? = nil) {
+        var all = shapes
+        if let inProgress { all.append(inProgress) }
+        func visible(_ shape: any AnnotationShape) -> Bool {
+            guard let dirtyRect else { return true }
+            return shape.bounds.intersects(dirtyRect)
+        }
+        for shape in all where shape is MosaicShape && visible(shape) {
+            shape.draw(in: context, environment: environment)
+        }
+        SpotlightShape.drawDimming(all.compactMap { $0 as? SpotlightShape }, in: context, bounds: environment.bounds)
+        for shape in all where !(shape is MosaicShape || shape is SpotlightShape || shape is WatermarkShape) && visible(shape) {
+            shape.draw(in: context, environment: environment)
+        }
+        for shape in all where shape is WatermarkShape {
+            shape.draw(in: context, environment: environment)
+        }
     }
 }
 
@@ -512,16 +705,78 @@ extension HighlighterShape {
 
 extension MosaicShape {
     var tool: AnnotationTool { .mosaic }
-    var style: ToolStyle { .matching(value: brushWidth, in: ToolStyle.mosaicBrushWidths, color: nil) }
+    var style: ToolStyle {
+        var style = ToolStyle.matching(value: brushWidth, in: ToolStyle.mosaicBrushWidths, color: nil)
+        style.options.mosaicEffect = effect
+        style.options.amount = amount
+        if case .rect = region { style.options.mosaicMode = .area }
+        return style
+    }
     func restyled(_ style: ToolStyle) -> any AnnotationShape {
         var copy = self
-        copy.brushWidth = style.mosaicBrushWidth
-        copy.blockSize = style.mosaicBlockSize
+        if case .stroke(let points, _) = region {
+            copy.region = .stroke(points: points, brushWidth: style.mosaicBrushWidth)
+        }
+        copy.effect = style.options.mosaicEffect
+        copy.amount = style.options.amount
         return copy
     }
     func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
-        var copy = self; copy.points = offset(points, dx, dy); return copy
+        var copy = self
+        switch region {
+        case .stroke(let points, let width): copy.region = .stroke(points: offset(points, dx, dy), brushWidth: width)
+        case .rect(let rect): copy.region = .rect(rect.offsetBy(dx: dx, dy: dy))
+        }
+        return copy
     }
+    var editHandles: [CGPoint] {
+        if case .rect(let rect) = region { return SelectionHandle.allCases.map { $0.point(in: rect) } }
+        return []
+    }
+    func dragging(handle index: Int, to point: CGPoint, constrain: Bool) -> any AnnotationShape {
+        guard case .rect(let rect) = region else { return self }
+        var copy = self
+        copy.region = .rect(resizedRect(rect, handleIndex: index, to: point, square: constrain))
+        return copy
+    }
+}
+
+extension SpotlightShape {
+    var tool: AnnotationTool { .spotlight }
+    var style: ToolStyle {
+        var style = ToolStyle(size: .medium, colorIndex: Palette.defaultIndex)
+        style.options.spotlightShape = kind
+        style.options.amount = opacity
+        return style
+    }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self; copy.kind = style.options.spotlightShape; copy.opacity = style.options.amount; return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self; copy.rect = rect.offsetBy(dx: dx, dy: dy); return copy
+    }
+    var editHandles: [CGPoint] { SelectionHandle.allCases.map { $0.point(in: rect) } }
+    func dragging(handle index: Int, to point: CGPoint, constrain: Bool) -> any AnnotationShape {
+        var copy = self; copy.rect = resizedRect(rect, handleIndex: index, to: point, square: constrain); return copy
+    }
+}
+
+extension WatermarkShape {
+    var tool: AnnotationTool { .watermark }
+    var style: ToolStyle {
+        var style = ToolStyle(size: .medium, colorIndex: Palette.colors.firstIndex(of: color) ?? 6)
+        style.options.text = text
+        style.options.amount = opacity
+        return style
+    }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self
+        copy.color = style.color
+        copy.opacity = style.options.amount
+        copy.text = String(style.options.text.prefix(Self.maxLength))
+        return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape { self }
 }
 
 extension TextShape {

@@ -2,7 +2,7 @@ import CoreGraphics
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
-/// 马赛克取样源：对一块屏幕的定格原图做像素化（`CIPixellate`），按块大小缓存。
+/// 马赛克取样源：对定格原图做像素化（`CIPixellate`）或高斯模糊，按参数缓存。
 final class MosaicSource {
     let image: CGImage
     /// 截图对应的屏幕本地范围（pt），绘制时铺满这个范围。
@@ -10,6 +10,7 @@ final class MosaicSource {
     let scale: CGFloat
 
     private var cache: [Int: CGImage] = [:]
+    private var blurCache: [Int: CGImage] = [:]
     private static let context = CIContext(options: [.cacheIntermediates: false])
 
     init(image: CGImage, localBounds: CGRect, scale: CGFloat) {
@@ -34,6 +35,23 @@ final class MosaicSource {
                                                       format: .RGBA8, colorSpace: image.colorSpace)
         else { return nil }
         cache[pixels] = result
+        return result
+    }
+
+    /// 高斯模糊，`radius` 单位为 pt。边缘先延伸再裁剪，避免四周发暗。
+    func blurred(radius: CGFloat) -> CGImage? {
+        let pixels = max(1, Int((radius * scale).rounded()))
+        if let cached = blurCache[pixels] { return cached }
+
+        let input = CIImage(cgImage: image)
+        let filter = CIFilter.gaussianBlur()
+        filter.inputImage = input.clampedToExtent()
+        filter.radius = Float(pixels)
+        guard let output = filter.outputImage?.cropped(to: input.extent),
+              let result = Self.context.createCGImage(output, from: input.extent,
+                                                      format: .RGBA8, colorSpace: image.colorSpace)
+        else { return nil }
+        blurCache[pixels] = result
         return result
     }
 }

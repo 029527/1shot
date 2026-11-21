@@ -2,7 +2,7 @@ import AppKit
 
 /// 工具栏上的按钮。
 enum ToolbarItem: CaseIterable, Hashable {
-    case rectangle, ellipse, arrow, pen, highlighter, text, counter, mosaic
+    case rectangle, ellipse, arrow, pen, highlighter, text, counter, mosaic, spotlight, watermark
     case undo, redo
     case longScreenshot, ocr, pin
     case save, cancel, done
@@ -17,6 +17,8 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .counter: return "1.circle"
         case .text: return "t.square"
         case .mosaic: return "checkerboard.rectangle"
+        case .spotlight: return "circle.square"
+        case .watermark: return "watermark" // 自绘，见 `ToolbarButton.image(for:)`
         case .longScreenshot: return "arrow.up.and.down.text.horizontal"
         case .ocr: return "text.viewfinder"
         case .pin: return "pin"
@@ -38,6 +40,8 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .counter: return String(localized: "序号")
         case .text: return String(localized: "文字")
         case .mosaic: return String(localized: "马赛克")
+        case .spotlight: return String(localized: "高亮")
+        case .watermark: return String(localized: "水印")
         case .longScreenshot: return String(localized: "长截图")
         case .ocr: return String(localized: "识别文字")
         case .pin: return String(localized: "贴图到桌面")
@@ -60,6 +64,8 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .counter: return "N"
         case .text: return "T"
         case .mosaic: return "M"
+        case .spotlight: return "S"
+        case .watermark: return "W"
         case .longScreenshot: return "⌘L"
         case .ocr: return "⌘R"
         case .pin: return "⌘T"
@@ -75,7 +81,8 @@ enum ToolbarItem: CaseIterable, Hashable {
 
     var isDrawingTool: Bool {
         switch self {
-        case .rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter, .mosaic: return true
+        case .rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter, .mosaic, .spotlight, .watermark:
+            return true
         default: return false
         }
     }
@@ -204,9 +211,7 @@ final class ToolbarButton: NSButton {
         toolTip = item.toolTip
         refusesFirstResponder = true
         setAccessibilityLabel(item.title)
-        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
-        image = NSImage(systemSymbolName: item.symbolName, accessibilityDescription: item.title)?
-            .withSymbolConfiguration(config)
+        image = Self.image(for: item)
         wantsLayer = true
         layer?.cornerRadius = 5
         updateAppearance()
@@ -218,6 +223,30 @@ final class ToolbarButton: NSButton {
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// SF Symbol；水印没有合适的符号，画三道斜线（模板图，跟随按钮颜色）。
+    static func image(for item: ToolbarItem) -> NSImage? {
+        if item == .watermark {
+            let image = NSImage(size: CGSize(width: 18, height: 18), flipped: false) { rect in
+                NSColor.black.setStroke()
+                for offset in [-5.0, 0.0, 5.0] {
+                    let path = NSBezierPath()
+                    path.lineWidth = 1.6
+                    path.lineCapStyle = .round
+                    path.move(to: CGPoint(x: rect.midX - 4 + offset, y: rect.midY - 6))
+                    path.line(to: CGPoint(x: rect.midX + 4 + offset, y: rect.midY + 6))
+                    path.stroke()
+                }
+                return true
+            }
+            image.isTemplate = true
+            image.accessibilityDescription = item.title
+            return image
+        }
+        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        return NSImage(systemSymbolName: item.symbolName, accessibilityDescription: item.title)?
+            .withSymbolConfiguration(config)
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

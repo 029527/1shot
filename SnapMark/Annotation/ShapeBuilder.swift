@@ -27,7 +27,8 @@ struct ShapeBuilder {
     mutating func update(to point: CGPoint, constrain: Bool) {
         current = point
         constrained = constrain
-        if tool == .pen || tool == .mosaic || tool == .highlighter, let last = points.last,
+        let freehand = tool == .pen || tool == .highlighter || (tool == .mosaic && style.options.mosaicMode == .brush)
+        if freehand, let last = points.last,
            hypot(point.x - last.x, point.y - last.y) >= Self.minimumPointSpacing {
             points.append(point)
         }
@@ -53,7 +54,19 @@ struct ShapeBuilder {
             return PenShape(points: points, color: style.color, lineWidth: style.lineWidth)
 
         case .mosaic:
-            return MosaicShape(points: points, brushWidth: style.mosaicBrushWidth, blockSize: style.mosaicBlockSize)
+            let options = style.options
+            if options.mosaicMode == .area {
+                let rect = Self.rect(from: start, to: current, square: constrained)
+                guard rect.width >= 2, rect.height >= 2 else { return nil }
+                return MosaicShape(region: .rect(rect), effect: options.mosaicEffect, amount: options.amount)
+            }
+            return MosaicShape(region: .stroke(points: points, brushWidth: style.mosaicBrushWidth),
+                               effect: options.mosaicEffect, amount: options.amount)
+
+        case .spotlight:
+            let rect = Self.rect(from: start, to: current, square: constrained)
+            guard rect.width >= 2, rect.height >= 2 else { return nil }
+            return SpotlightShape(rect: rect, kind: style.options.spotlightShape, opacity: style.options.amount)
 
         case .highlighter:
             // ⇧：从起点拉直线（吸附 45°）。
@@ -65,7 +78,7 @@ struct ShapeBuilder {
             return CounterShape(center: current, number: counterNumber, color: style.color,
                                 diameter: style.counterDiameter)
 
-        case .text:
+        case .text, .watermark:
             return nil
         }
     }

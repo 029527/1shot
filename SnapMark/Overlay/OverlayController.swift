@@ -24,7 +24,8 @@ final class OverlayController {
 
     // 工具栏与标注
     let toolbar = ToolbarView(groups: [
-        [.rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter, .mosaic],
+        [.rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter],
+        [.mosaic, .spotlight, .watermark],
         [.undo, .redo],
         [.longScreenshot, .ocr, .pin],
         [.save, .cancel, .done],
@@ -671,6 +672,8 @@ extension OverlayController: OverlayViewDelegate {
 
     func overlayView(_ view: OverlayView, perform command: OverlayCommand) -> Bool {
         guard let model else { return false }
+        // 正在属性条里输入水印文字：⌘C / ⌘V / ⌘Z 等交给输入框。
+        if annotations.isTypingInStylePanel { return false }
         let hasSelection = model.selection != nil && (model.state == .selected || model.state == .annotating)
         switch command {
         case .finish:

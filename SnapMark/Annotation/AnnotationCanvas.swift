@@ -61,10 +61,9 @@ final class AnnotationCanvasView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext, !selection.isEmpty else { return }
         context.saveGState()
         context.clip(to: selection)
-        for shape in shapes where shape.bounds.intersects(dirtyRect) {
-            shape.draw(in: context, environment: environment)
-        }
-        inProgress?.draw(in: context, environment: environment)
+        var environment = environment
+        environment.bounds = selection
+        AnnotationRenderer.draw(shapes, inProgress: inProgress, in: context, environment: environment, dirtyRect: dirtyRect)
         context.restoreGState()
 
         // 选中图形的装饰不受选区裁剪。

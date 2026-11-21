@@ -7,7 +7,8 @@ import AppKit
 @MainActor
 final class PinEditor: NSObject {
     static let toolbarGroups: [[ToolbarItem]] = [
-        [.rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter, .mosaic],
+        [.rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter],
+        [.mosaic, .spotlight, .watermark],
         [.undo, .redo],
         [.ocr],
         [.save, .cancel, .done],
@@ -228,8 +229,8 @@ final class PinEditor: NSObject {
     }
 
     private func makePanel() -> NSPanel {
-        let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
-                            backing: .buffered, defer: false)
+        let panel = KeyablePanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                                 backing: .buffered, defer: false)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.isOpaque = false
@@ -328,4 +329,9 @@ extension PinEditor: ToolbarViewDelegate {
         // 点工具栏不应让贴图失去焦点（键盘快捷键继续作用于贴图）。
         pin?.makeKey()
     }
+}
+
+/// 无边框面板默认不能成为 key；工具栏里的水印输入框需要键盘焦点。
+private final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
 }

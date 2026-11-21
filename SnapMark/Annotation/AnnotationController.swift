@@ -25,7 +25,7 @@ final class AnnotationController {
     private(set) var tool: AnnotationTool?
     private(set) var document = AnnotationDocument()
     private var builder: ShapeBuilder?
-    private var styles = StyleStore()
+    private var styles: StyleStore
 
     let canvas = AnnotationCanvasView(frame: .zero)
     let stylePanel = StylePanelView(frame: .zero)
@@ -40,6 +40,8 @@ final class AnnotationController {
     private var editDrag: EditDrag?
     /// 重新编辑文字前的快照（结束输入时合并成一步撤销）。
     private var textEditSnapshot: [any AnnotationShape]?
+    /// 选中水印工具时的快照：期间的修改（输入、调不透明度、换颜色）合并成一步撤销。
+    private var watermarkSnapshot: [any AnnotationShape]?
 
     private struct EditDrag {
         var start: CGPoint
@@ -56,7 +58,9 @@ final class AnnotationController {
 
     var isEditingShape: Bool { editDrag != nil }
 
-    init() {
+    /// `styles`：测试时传入独立的 UserDefaults，避免改到真实设置。
+    init(styles: StyleStore = StyleStore()) {
+        self.styles = styles
         stylePanel.delegate = self
         stylePanel.isHidden = true
         textEditor.onFinish = { [weak self] shape in self?.textFinished(shape) }
@@ -98,6 +102,7 @@ final class AnnotationController {
         selectedShapeID = nil
         editDrag = nil
         textEditSnapshot = nil
+        watermarkSnapshot = nil
         document.removeAll()
         mosaicSource = nil
         source = nil
@@ -133,6 +138,12 @@ final class AnnotationController {
         }
         self.selection = selection
         canvas.selection = selection
+        if let watermark = currentWatermark, watermark.area != selection {
+            var updated = watermark
+            updated.area = selection
+            document.updateWithoutUndo(id: watermark.id, with: updated)
+            syncCanvas()
+        }
     }
 
     /// 属性条放在工具栏旁边；没有选中工具时隐藏。
@@ -177,15 +188,64 @@ final class AnnotationController {
     func toggle(_ newTool: AnnotationTool) {
         finishTextEditing()
         selectedShapeID = nil
+        endWatermarkEditing()
         syncCanvas()
         tool = tool == newTool ? nil : newTool
         if tool == .mosaic, let style = currentStyle {
-            // 提前生成像素化图，避免第一笔卡顿。
+            // 提前生成像素化 / 模糊图，避免第一笔卡顿。
             prepareMosaicSource()
-            _ = mosaicSource?.pixelated(blockSize: style.mosaicBlockSize)
+            warmUpMosaic(style)
+        }
+        if tool == .watermark {
+            watermarkSnapshot = document.snapshot
+            if let style = currentStyle { applyWatermark(style) }
         }
         onChange?()
     }
+
+    // MARK: 水印（整张图一个）
+
+    var currentWatermark: WatermarkShape? {
+        document.shapes.lazy.compactMap { $0 as? WatermarkShape }.first
+    }
+
+    /// 按样式更新水印：文字为空时去掉。不记撤销（结束时合并）。
+    private func applyWatermark(_ style: ToolStyle) {
+        let text = String(style.options.text.prefix(WatermarkShape.maxLength))
+        if let existing = currentWatermark {
+            if text.isEmpty {
+                document.removeWithoutUndo(id: existing.id)
+            } else {
+                document.updateWithoutUndo(id: existing.id, with: existing.restyled(style))
+            }
+        } else if !text.isEmpty {
+            document.appendWithoutUndo(WatermarkShape(text: text, color: style.color, opacity: style.options.amount,
+                                                      area: selection))
+        }
+        syncCanvas()
+    }
+
+    /// 离开水印工具：有改动就记一步撤销。
+    private func endWatermarkEditing() {
+        guard let snapshot = watermarkSnapshot else { return }
+        watermarkSnapshot = nil
+        let before = snapshot.compactMap { $0 as? WatermarkShape }.first
+        let after = currentWatermark
+        let changed = before?.text != after?.text || before?.color != after?.color
+            || before?.opacity != after?.opacity || (before == nil) != (after == nil)
+        if changed { document.commitEdit(from: snapshot) }
+    }
+
+    private func warmUpMosaic(_ style: ToolStyle) {
+        if style.options.mosaicEffect == .pixelate {
+            _ = mosaicSource?.pixelated(blockSize: style.mosaicBlockSize)
+        } else {
+            _ = mosaicSource?.blurred(radius: MosaicShape.blurRadius(amount: style.options.amount))
+        }
+    }
+
+    /// 属性条里的文字输入框正在输入（快捷键交给输入框）。
+    var isTypingInStylePanel: Bool { stylePanel.isEditingText }
 
     // MARK: 鼠标
 
@@ -197,6 +257,8 @@ final class AnnotationController {
             return true
         }
         guard let tool, selection.contains(point), let style = currentStyle else { return false }
+        // 水印作用于整张图，点击画布不做事（也不让遮罩开始重新框选）。
+        if tool.isDocumentLevel { return true }
 
         if tool == .text {
             if let host = canvas.superview?.superview as? AnnotationHost {
@@ -348,18 +410,24 @@ final class AnnotationController {
 
     func undo() {
         finishTextEditing()
+        endWatermarkEditing()
         if document.undo() {
             syncCanvas()
             onChange?()
         }
+        // 仍在水印工具里：从撤销后的状态重新开始记录。
+        if tool == .watermark { watermarkSnapshot = document.snapshot }
     }
 
     func redo() {
         finishTextEditing()
+        endWatermarkEditing()
         if document.redo() {
             syncCanvas()
             onChange?()
         }
+        // 仍在水印工具里：从撤销后的状态重新开始记录。
+        if tool == .watermark { watermarkSnapshot = document.snapshot }
     }
 
     // MARK: 文字
@@ -378,10 +446,9 @@ final class AnnotationController {
 
     /// 在屏幕本地 pt 坐标系里绘制所有标注（导出用）。
     func draw(in context: CGContext) {
-        let environment = canvas.environment
-        for shape in document.shapes {
-            shape.draw(in: context, environment: environment)
-        }
+        var environment = canvas.environment
+        environment.bounds = selection
+        AnnotationRenderer.draw(document.shapes, in: context, environment: environment)
     }
 
     /// 下一个序号：现有序号的最大值 + 1（撤销后自动接上）。
@@ -440,6 +507,24 @@ extension AnnotationController: StylePanelDelegate {
         style.colorIndex = index
         styles.setStyle(style, for: tool)
         if tool == .text { textEditor.update(style: style) }
+        if tool == .watermark { applyWatermark(style) }
+        onChange?()
+    }
+
+    func stylePanel(_ panel: StylePanelView, didChange options: ToolOptions) {
+        if tool == nil, let shape = selectedShape {
+            var style = shape.style
+            let size = style.size
+            style.options = options
+            style.size = size
+            restyleSelected(style)
+            return
+        }
+        guard let tool, var style = currentStyle else { return }
+        style.options = options
+        styles.setStyle(style, for: tool)
+        if tool == .watermark { applyWatermark(style) }
+        if tool == .mosaic { warmUpMosaic(style) }
         onChange?()
     }
 
