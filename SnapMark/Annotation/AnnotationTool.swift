@@ -3,7 +3,7 @@ import Foundation
 
 /// 绘图工具。
 enum AnnotationTool: String, CaseIterable {
-    case rectangle, ellipse, arrow, pen, text, mosaic
+    case rectangle, ellipse, arrow, pen, highlighter, text, counter, mosaic
 
     init?(item: ToolbarItem) {
         switch item {
@@ -11,6 +11,8 @@ enum AnnotationTool: String, CaseIterable {
         case .ellipse: self = .ellipse
         case .arrow: self = .arrow
         case .pen: self = .pen
+        case .highlighter: self = .highlighter
+        case .counter: self = .counter
         case .text: self = .text
         case .mosaic: self = .mosaic
         default: return nil
@@ -23,6 +25,8 @@ enum AnnotationTool: String, CaseIterable {
         case .ellipse: return .ellipse
         case .arrow: return .arrow
         case .pen: return .pen
+        case .highlighter: return .highlighter
+        case .counter: return .counter
         case .text: return .text
         case .mosaic: return .mosaic
         }
@@ -70,10 +74,14 @@ struct ToolStyle: Equatable {
     static let lineWidths: [CGFloat] = [2, 4, 8]
     static let fontSizes: [CGFloat] = [14, 20, 28]
     static let mosaicBrushWidths: [CGFloat] = [14, 26, 40]
+    static let highlighterWidths: [CGFloat] = [10, 18, 28]
+    static let counterDiameters: [CGFloat] = [20, 26, 34]
 
     var lineWidth: CGFloat { Self.lineWidths[size.rawValue] }
     var fontSize: CGFloat { Self.fontSizes[size.rawValue] }
     var mosaicBrushWidth: CGFloat { Self.mosaicBrushWidths[size.rawValue] }
+    var highlighterWidth: CGFloat { Self.highlighterWidths[size.rawValue] }
+    var counterDiameter: CGFloat { Self.counterDiameters[size.rawValue] }
     /// 马赛克块大小随粗细变化。
     var mosaicBlockSize: CGFloat { (mosaicBrushWidth / 2.5).rounded() }
 }
@@ -91,8 +99,13 @@ struct StyleStore {
 
     func style(for tool: AnnotationTool) -> ToolStyle {
         let size = (defaults.object(forKey: sizeKey(tool)) as? Int).flatMap(SizeLevel.init(rawValue:)) ?? .medium
-        let color = (defaults.object(forKey: colorKey(tool)) as? Int) ?? Palette.defaultIndex
+        let color = (defaults.object(forKey: colorKey(tool)) as? Int) ?? Self.defaultColorIndex(for: tool)
         return ToolStyle(size: size, colorIndex: color)
+    }
+
+    /// 荧光笔默认黄色，其余默认红色。
+    static func defaultColorIndex(for tool: AnnotationTool) -> Int {
+        tool == .highlighter ? 2 : Palette.defaultIndex
     }
 
     func setStyle(_ style: ToolStyle, for tool: AnnotationTool) {

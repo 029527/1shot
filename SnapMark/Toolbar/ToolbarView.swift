@@ -2,7 +2,7 @@ import AppKit
 
 /// 工具栏上的按钮。
 enum ToolbarItem: CaseIterable, Hashable {
-    case rectangle, ellipse, arrow, pen, text, mosaic
+    case rectangle, ellipse, arrow, pen, highlighter, text, counter, mosaic
     case undo, redo
     case save, cancel, done
 
@@ -12,6 +12,8 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .ellipse: return "circle"
         case .arrow: return "arrow.up.right"
         case .pen: return "scribble"
+        case .highlighter: return "highlighter"
+        case .counter: return "1.circle"
         case .text: return "t.square"
         case .mosaic: return "checkerboard.rectangle"
         case .undo: return "arrow.uturn.backward"
@@ -28,6 +30,8 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .ellipse: return "椭圆"
         case .arrow: return "箭头"
         case .pen: return "画笔"
+        case .highlighter: return "荧光笔"
+        case .counter: return "序号"
         case .text: return "文字"
         case .mosaic: return "马赛克"
         case .undo: return "撤销"
@@ -45,6 +49,8 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .ellipse: return "O"
         case .arrow: return "A"
         case .pen: return "P"
+        case .highlighter: return "H"
+        case .counter: return "N"
         case .text: return "T"
         case .mosaic: return "M"
         case .undo: return "⌘Z"
@@ -59,7 +65,7 @@ enum ToolbarItem: CaseIterable, Hashable {
 
     var isDrawingTool: Bool {
         switch self {
-        case .rectangle, .ellipse, .arrow, .pen, .text, .mosaic: return true
+        case .rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter, .mosaic: return true
         default: return false
         }
     }

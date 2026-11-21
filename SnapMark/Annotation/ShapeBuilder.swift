@@ -8,12 +8,15 @@ struct ShapeBuilder {
     private(set) var current: CGPoint
     private(set) var points: [CGPoint]
     private(set) var constrained = false
+    /// 序号标记的数字。
+    let counterNumber: Int
 
     /// 画笔 / 马赛克相邻采样点的最小间距。
     static let minimumPointSpacing: CGFloat = 1
 
-    init(tool: AnnotationTool, style: ToolStyle, start: CGPoint) {
+    init(tool: AnnotationTool, style: ToolStyle, start: CGPoint, counterNumber: Int = 1) {
         self.tool = tool
+        self.counterNumber = counterNumber
         self.style = style
         self.start = start
         current = start
@@ -24,7 +27,7 @@ struct ShapeBuilder {
     mutating func update(to point: CGPoint, constrain: Bool) {
         current = point
         constrained = constrain
-        if tool == .pen || tool == .mosaic, let last = points.last,
+        if tool == .pen || tool == .mosaic || tool == .highlighter, let last = points.last,
            hypot(point.x - last.x, point.y - last.y) >= Self.minimumPointSpacing {
             points.append(point)
         }
@@ -51,6 +54,16 @@ struct ShapeBuilder {
 
         case .mosaic:
             return MosaicShape(points: points, brushWidth: style.mosaicBrushWidth, blockSize: style.mosaicBlockSize)
+
+        case .highlighter:
+            // ⇧：从起点拉直线（吸附 45°）。
+            let stroke = constrained ? [start, Self.snap(from: start, to: current)] : points
+            return HighlighterShape(points: stroke, color: style.color, lineWidth: style.highlighterWidth)
+
+        case .counter:
+            // 单击放置，拖动可以调整位置。
+            return CounterShape(center: current, number: counterNumber, color: style.color,
+                                diameter: style.counterDiameter)
 
         case .text:
             return nil

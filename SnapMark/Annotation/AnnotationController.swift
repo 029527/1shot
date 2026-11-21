@@ -133,7 +133,7 @@ final class AnnotationController {
         }
         if tool == .mosaic { prepareMosaicSource() }
 
-        var builder = ShapeBuilder(tool: tool, style: style, start: clamp(point))
+        var builder = ShapeBuilder(tool: tool, style: style, start: clamp(point), counterNumber: nextCounterNumber)
         builder.update(to: clamp(point), constrain: constrain)
         self.builder = builder
         canvas.inProgress = builder.makeShape()
@@ -206,6 +206,11 @@ final class AnnotationController {
         for shape in document.shapes {
             shape.draw(in: context, environment: environment)
         }
+    }
+
+    /// 下一个序号：现有序号的最大值 + 1（撤销后自动接上）。
+    var nextCounterNumber: Int {
+        (document.shapes.compactMap { ($0 as? CounterShape)?.number }.max() ?? 0) + 1
     }
 
     // MARK: 内部

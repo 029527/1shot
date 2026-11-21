@@ -19,7 +19,7 @@ final class OverlayController {
 
     // 工具栏与标注
     let toolbar = ToolbarView(groups: [
-        [.rectangle, .ellipse, .arrow, .pen, .text, .mosaic],
+        [.rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter, .mosaic],
         [.undo, .redo],
         [.save, .cancel, .done],
     ])
@@ -527,7 +527,7 @@ extension OverlayController: OverlayViewDelegate {
             copyColor()
             return true
         default:
-            // 工具快捷键：R / O / A / P / T / M
+            // 工具快捷键：R / O / A / P / H / T / N / M
             if event.modifierFlags.isDisjoint(with: [.command, .control, .option]),
                model?.state == .selected || model?.state == .annotating,
                let characters = event.charactersIgnoringModifiers, let tool = AnnotationTool(shortcut: characters) {

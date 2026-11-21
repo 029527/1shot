@@ -259,3 +259,61 @@ final class ToolStyleTests: XCTestCase {
         XCTAssertEqual(Palette.colors.count, 8)
     }
 }
+
+final class CounterAndHighlighterTests: XCTestCase {
+    let style = ToolStyle(size: .medium, colorIndex: 0)
+
+    func testCounterPlacedAtClickWithNumber() throws {
+        var builder = ShapeBuilder(tool: .counter, style: style, start: CGPoint(x: 50, y: 50), counterNumber: 3)
+        builder.update(to: CGPoint(x: 60, y: 55), constrain: false)
+        let shape = try XCTUnwrap(builder.makeShape() as? CounterShape)
+        XCTAssertEqual(shape.number, 3)
+        XCTAssertEqual(shape.center, CGPoint(x: 60, y: 55))
+        XCTAssertEqual(shape.diameter, 26)
+        XCTAssertTrue(shape.hitTest(CGPoint(x: 70, y: 55), tolerance: 0))
+        XCTAssertFalse(shape.hitTest(CGPoint(x: 80, y: 55), tolerance: 0))
+    }
+
+    func testCounterTextColorContrast() {
+        let onRed = CounterShape(center: .zero, number: 1, color: Palette.colors[0], diameter: 20)
+        let onYellow = CounterShape(center: .zero, number: 1, color: Palette.colors[2], diameter: 20)
+        let onWhite = CounterShape(center: .zero, number: 1, color: Palette.colors[7], diameter: 20)
+        XCTAssertEqual(onRed.textColor, .white)
+        XCTAssertEqual(onYellow.textColor, .black)
+        XCTAssertEqual(onWhite.textColor, .black)
+    }
+
+    func testHighlighterShiftDrawsStraightLine() throws {
+        var builder = ShapeBuilder(tool: .highlighter, style: style, start: .zero)
+        builder.update(to: CGPoint(x: 30, y: 5), constrain: false)
+        builder.update(to: CGPoint(x: 100, y: 8), constrain: true)
+        let shape = try XCTUnwrap(builder.makeShape() as? HighlighterShape)
+        XCTAssertEqual(shape.points.count, 2)
+        XCTAssertEqual(shape.points[1].y, 0, accuracy: 0.001)
+        XCTAssertEqual(shape.lineWidth, 18)
+    }
+
+    func testHighlighterDefaultsToYellow() {
+        let suite = "SnapMarkTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(StyleStore(defaults: defaults).style(for: .highlighter).colorIndex, 2)
+        XCTAssertEqual(AnnotationTool(shortcut: "h"), .highlighter)
+        XCTAssertEqual(AnnotationTool(shortcut: "N"), .counter)
+    }
+
+    func testHighlighterIsTranslucent() throws {
+        let geometry = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 100, height: 80), scale: 1)
+        let image = ImageExporterTests.solidImage(width: 100, height: 80, color: CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1))
+        // 同一条笔画来回经过同一点，颜色也不应叠深。
+        let shape = HighlighterShape(points: [CGPoint(x: 10, y: 40), CGPoint(x: 90, y: 40), CGPoint(x: 10, y: 40)],
+                                     color: Palette.colors[4], lineWidth: 10)
+        let output = try XCTUnwrap(ImageExporter.compose(image: image, geometry: geometry,
+                                                         selection: geometry.localBounds) { ctx in
+            shape.draw(in: ctx, environment: AnnotationEnvironment())
+        })
+        let pixel = ImageExporterTests.pixel(output, x: 50, y: 40)
+        // 白底 + 40% 蓝（#007AFF）：红通道约 153，而不是 0（不透明）或更低（叠加）。
+        XCTAssertEqual(Double(pixel.0), 153, accuracy: 6)
+    }
+}

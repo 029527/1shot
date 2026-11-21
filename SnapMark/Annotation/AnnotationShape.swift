@@ -295,3 +295,87 @@ struct TextShape: AnnotationShape {
         frame.insetBy(dx: -tolerance, dy: -tolerance).contains(point)
     }
 }
+
+// MARK: - 荧光笔
+
+struct HighlighterShape: AnnotationShape {
+    let id = UUID()
+    var points: [CGPoint]
+    var color: PaletteColor
+    var lineWidth: CGFloat
+
+    /// 半透明，整条笔画一次描边，自身重叠处不会变深。
+    static let opacity: CGFloat = 0.4
+
+    var path: CGPath { PenShape.smoothPath(points) }
+
+    var bounds: CGRect {
+        PenShape(points: points, color: color, lineWidth: lineWidth).bounds
+    }
+
+    func draw(in context: CGContext, environment: AnnotationEnvironment) {
+        context.saveGState()
+        context.setAlpha(Self.opacity)
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        context.setStrokeColor(color.cgColor)
+        context.setLineWidth(lineWidth)
+        context.setLineCap(.butt)
+        context.setLineJoin(.round)
+        context.addPath(path)
+        context.strokePath()
+        context.endTransparencyLayer()
+        context.restoreGState()
+    }
+
+    func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool {
+        strokeHit(path, lineWidth: lineWidth, point: point, tolerance: tolerance)
+    }
+}
+
+// MARK: - 序号标记
+
+struct CounterShape: AnnotationShape {
+    let id = UUID()
+    var center: CGPoint
+    var number: Int
+    var color: PaletteColor
+    var diameter: CGFloat
+
+    var circle: CGRect {
+        CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2, width: diameter, height: diameter)
+    }
+
+    var bounds: CGRect { circle.insetBy(dx: -2, dy: -2) }
+
+    /// 浅色底（白、黄）用黑字，其余用白字。
+    var textColor: NSColor {
+        let luminance = 0.299 * color.red + 0.587 * color.green + 0.114 * color.blue
+        return luminance > 0.7 ? .black : .white
+    }
+
+    func draw(in context: CGContext, environment: AnnotationEnvironment) {
+        context.saveGState()
+        context.setFillColor(color.cgColor)
+        context.fillEllipse(in: circle)
+        context.setStrokeColor(CGColor(gray: 1, alpha: 0.9))
+        context.setLineWidth(max(1.5, diameter / 16))
+        context.strokeEllipse(in: circle.insetBy(dx: diameter / 32, dy: diameter / 32))
+        context.restoreGState()
+
+        let text = "\(number)"
+        let fontSize = diameter * (text.count > 1 ? 0.48 : 0.58)
+        let string = NSAttributedString(string: text, attributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold),
+            .foregroundColor: textColor,
+        ])
+        let size = string.size()
+        let previous = NSGraphicsContext.current
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        string.draw(at: CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2))
+        NSGraphicsContext.current = previous
+    }
+
+    func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool {
+        hypot(point.x - center.x, point.y - center.y) <= diameter / 2 + tolerance
+    }
+}
