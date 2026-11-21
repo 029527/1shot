@@ -7,6 +7,9 @@ final class OverlayController {
     /// 截图会话结束（完成或取消，包括另存为面板关闭）后回调。
     var onDismiss: (() -> Void)?
 
+    /// 长截图需要截取实时画面。
+    var captureService: CaptureService?
+
     /// 遮罩正在显示。
     private(set) var isPresenting = false
     private var panels: [CGDirectDisplayID: OverlayPanel] = [:]
@@ -265,8 +268,21 @@ final class OverlayController {
         }
     }
 
-    /// 长截图：关闭遮罩，在选区位置滚动拼接。
-    func startLongScreenshot() {}
+    /// 长截图：关闭遮罩，在选区位置滚动拼接。有标注时不可用（长图不带标注）。
+    func startLongScreenshot() {
+        guard !annotations.hasAnnotations, let active = activeSelection, let captureService else { return }
+        commitPendingEdits()
+        // 区域对齐到整像素，保证每帧尺寸一致。
+        let geometry = active.display.geometry
+        let pixel = geometry.integralPixelRect(fromLocal: active.local)
+        let region = geometry.globalRect(fromLocal: geometry.localRect(fromPixel: pixel))
+        let displayID = active.display.displayID
+        model?.finish()
+        hidePanels()
+        endSession()
+        LongScreenshotController.shared.start(region: region, displayID: displayID, scale: geometry.scale,
+                                              captureService: captureService)
+    }
 
     // MARK: 绘制
 
@@ -457,6 +473,7 @@ final class OverlayController {
         toolbar.selectedTool = annotations.tool?.toolbarItem
         toolbar.setEnabled(annotations.document.canUndo, for: .undo)
         toolbar.setEnabled(annotations.document.canRedo, for: .redo)
+        toolbar.setEnabled(!annotations.hasAnnotations, for: .longScreenshot)
     }
 
     private func localPoint(_ global: CGPoint) -> CGPoint? {

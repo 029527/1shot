@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.startCapture()
         }
 
+        overlay.captureService = captureService
         overlay.onDismiss = { [weak self] in
             self?.isCapturing = false
         }
@@ -56,6 +57,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: 截图
 
     func startCapture() {
+        // 长截图进行中：再按快捷键 = 完成长截图。
+        if LongScreenshotController.shared.isActive {
+            LongScreenshotController.shared.finish()
+            return
+        }
         guard !isCapturing else {
             Log.capture.notice("截图进行中，忽略快捷键")
             return

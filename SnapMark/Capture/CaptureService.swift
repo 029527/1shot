@@ -180,4 +180,35 @@ final class CaptureService {
 
         return CaptureResult(displays: displays, windows: windows, converter: converter, timings: timings)
     }
+
+    /// 截取某块屏幕上的一个区域（长截图用）。`globalRect` 为 AppKit 全局坐标（pt），不含本 App 的窗口。
+    func captureRegion(_ globalRect: CGRect, displayID: CGDirectDisplayID, scale: CGFloat) async throws -> CGImage {
+        let content = try await content()
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+            throw CaptureError.noDisplays
+        }
+        let pid = getpid()
+        let filter: SCContentFilter
+        if let selfApp = content.applications.first(where: { $0.processID == pid }) {
+            filter = SCContentFilter(display: display, excludingApplications: [selfApp], exceptingWindows: [])
+        } else {
+            filter = SCContentFilter(display: display, excludingWindows: [])
+        }
+
+        // sourceRect：相对该显示器左上角的 pt 坐标。
+        let cgRect = CoordinateConverter.current.cgRect(fromAppKit: globalRect)
+        let configuration = SCStreamConfiguration()
+        configuration.sourceRect = cgRect.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
+        configuration.width = Int((globalRect.width * scale).rounded())
+        configuration.height = Int((globalRect.height * scale).rounded())
+        configuration.showsCursor = false
+        configuration.scalesToFit = false
+        configuration.captureResolution = .best
+        configuration.colorSpaceName = CGColorSpace.sRGB
+        do {
+            return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        } catch {
+            throw CaptureError.screenshotFailed(underlying: error)
+        }
+    }
 }
