@@ -1,4 +1,4 @@
-# SnapMark Logo
+# 1shot Logo
 
 方向 B「拖拽点」：圆角选区框，右下角换成一个可以抓住的点：截图时框选、调整、标记的那一刻。
 
@@ -6,13 +6,13 @@
 
 | 文件 | 用途 |
 |---|---|
-| `snapmark-symbol.svg` | 主标志（彩色，填充轮廓，32 px 以上） |
-| `snapmark-symbol-small.svg` | 小尺寸版（16–32 px）：线更粗、点更大、缺口更开 |
-| `snapmark-symbol-black.svg` / `-white.svg` / `-mono-3b4552.svg` | 单色黑、反白、品牌色单色 |
-| `snapmark-app-icon.svg` / `-small.svg` | macOS App 图标母版（1024 网格，圆角方块 824 × 824） |
-| `snapmark-menubar-template.svg` | 菜单栏模板图标（单色，系统自动适配深浅色） |
+| `1shot-symbol.svg` | 主标志（彩色，填充轮廓，32 px 以上） |
+| `1shot-symbol-small.svg` | 小尺寸版（16–32 px）：线更粗、点更大、缺口更开 |
+| `1shot-symbol-black.svg` / `-white.svg` / `-mono-3b4552.svg` | 单色黑、反白、品牌色单色 |
+| `1shot-app-icon.svg` / `-small.svg` | macOS App 图标母版（1024 网格，圆角方块 824 × 824） |
+| `1shot-menubar-template.svg` | 菜单栏模板图标（单色，系统自动适配深浅色） |
 
-App 图标 PNG 和菜单栏 PDF 由上面的 SVG 生成，位于 `SnapMark/Assets.xcassets`。
+App 图标 PNG 和菜单栏 PDF 由上面的 SVG 生成，位于 `1shot/Assets.xcassets`。
 
 ## 颜色（低饱和）
 

@@ -1,4 +1,4 @@
-# SnapMark
+# 1shot
 
 macOS 菜单栏截图工具（Swift + AppKit，macOS 14+）。
 
@@ -19,22 +19,22 @@ macOS 菜单栏截图工具（Swift + AppKit，macOS 14+）。
   - 贴图：贴剪贴板里的图片 / 文字 / 链接，刚截的图贴回原位置；剪贴板没有可贴内容时贴最近一次截图（默认未设置）
 - 圆角与阴影（设置 › 圆角与阴影）：复制和保存时输出四周透明的 PNG；贴图与历史保留原图
 - 贴图编辑：选中贴图按空格显示 / 隐藏截图工具栏，可在贴图上继续标注、复制、另存、识别文字
-- 界面语言：简体中文 / English（设置 › 通用 › 语言，默认跟随系统；文案在 `SnapMark/Localizable.xcstrings`）
+- 界面语言：简体中文 / English（设置 › 通用 › 语言，默认跟随系统；文案在 `1shot/Localizable.xcstrings`）
 - 不需要「辅助功能」权限，只需要「屏幕录制」权限
 
 ## 开发
 
 ```bash
-xcodegen generate                      # 由 project.yml 生成 SnapMark.xcodeproj（不进 git）
-xcodebuild -project SnapMark.xcodeproj -scheme SnapMark -derivedDataPath build build
-xcodebuild -project SnapMark.xcodeproj -scheme SnapMark -derivedDataPath build test
-open build/Build/Products/Debug/SnapMark.app
+xcodegen generate                      # 由 project.yml 生成 1shot.xcodeproj（不进 git）
+xcodebuild -project 1shot.xcodeproj -scheme 1shot -derivedDataPath build build
+xcodebuild -project 1shot.xcodeproj -scheme 1shot -derivedDataPath build test
+open build/Build/Products/Debug/1shot.app
 ```
 
 查看日志（含「快捷键 → 遮罩可见」耗时）：
 
 ```bash
-/usr/bin/log stream --predicate 'subsystem == "com.snapmark.SnapMark"'
+/usr/bin/log stream --predicate 'subsystem == "com.1shot.app"'
 ```
 
 签名使用固定的 Apple Development 证书（Team `FYP4TDQ4MV`），重新编译后无需重新授权屏幕录制。
