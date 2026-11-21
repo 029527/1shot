@@ -24,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusBar = StatusBarController(actions: .init(
             capture: { [weak self] in self?.startCapture() },
+            captureAndCopy: { [weak self] in self?.startCapture(mode: .quickCopy) },
+            pinClipboard: { [weak self] in self?.pinClipboard() },
             openSaveDirectory: { [weak self] in self?.openSaveDirectory() },
             openHistory: { [weak self] in self?.historyWindow.show() },
             openSettings: { [weak self] in self?.settingsWindow.show() }
@@ -31,6 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         KeyboardShortcuts.onKeyDown(for: .captureScreen) { [weak self] in
             self?.startCapture()
+        }
+        KeyboardShortcuts.onKeyDown(for: .captureAndCopy) { [weak self] in
+            self?.startCapture(mode: .quickCopy)
+        }
+        KeyboardShortcuts.onKeyDown(for: .pinClipboard) { [weak self] in
+            self?.pinClipboard()
         }
 
         overlay.captureService = captureService
@@ -56,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: 截图
 
-    func startCapture() {
+    func startCapture(mode: CaptureMode = .annotate) {
         // 长截图进行中：再按快捷键 = 完成长截图。
         if LongScreenshotController.shared.isActive {
             LongScreenshotController.shared.finish()
@@ -80,13 +88,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let result = try await captureService.captureAllScreens()
                 // 等待截图期间用户可能已经插拔了显示器。
                 guard isCapturing else { return }
-                overlay.present(result, stopwatch: stopwatch)
+                overlay.present(result, mode: mode, stopwatch: stopwatch)
             } catch {
                 isCapturing = false
                 Log.capture.error("截图失败：\(error.localizedDescription, privacy: .public)")
                 presentError(error)
             }
         }
+    }
+
+    /// 快速贴图：截图进行中时贴当前选区，否则贴剪贴板内容（或最近一次截图）。
+    func pinClipboard() {
+        if overlay.isPresenting {
+            if overlay.activeSelection != nil { overlay.pinToDesktop() }
+            return
+        }
+        guard !isCapturing else { return }
+        QuickPin.run()
     }
 
     @objc private func screenParametersChanged() {

@@ -1,11 +1,13 @@
 import AppKit
 import KeyboardShortcuts
 
-/// 菜单栏图标与菜单：截图、打开保存目录、设置…、退出。
+/// 菜单栏图标与菜单：截图、截图并复制、贴图、截图历史、打开保存目录、设置…、退出。
 @MainActor
 final class StatusBarController: NSObject {
     struct Actions {
         var capture: () -> Void
+        var captureAndCopy: () -> Void
+        var pinClipboard: () -> Void
         var openSaveDirectory: () -> Void
         var openHistory: () -> Void
         var openSettings: () -> Void
@@ -36,6 +38,18 @@ final class StatusBarController: NSObject {
         capture.setShortcut(for: .captureScreen)
         menu.addItem(capture)
 
+        let quick = NSMenuItem(title: "截图并复制", action: #selector(captureAndCopyClicked), keyEquivalent: "")
+        quick.target = self
+        quick.setShortcut(for: .captureAndCopy)
+        menu.addItem(quick)
+
+        let pin = NSMenuItem(title: "贴图（剪贴板）", action: #selector(pinClicked), keyEquivalent: "")
+        pin.target = self
+        pin.setShortcut(for: .pinClipboard)
+        menu.addItem(pin)
+
+        menu.addItem(.separator())
+
         let history = NSMenuItem(title: "截图历史…", action: #selector(historyClicked), keyEquivalent: "")
         history.target = self
         menu.addItem(history)
@@ -61,6 +75,14 @@ final class StatusBarController: NSObject {
     @objc private func captureClicked() {
         // 等菜单完全收起后再截图。
         DispatchQueue.main.async { [actions] in actions.capture() }
+    }
+
+    @objc private func captureAndCopyClicked() {
+        DispatchQueue.main.async { [actions] in actions.captureAndCopy() }
+    }
+
+    @objc private func pinClicked() {
+        actions.pinClipboard()
     }
 
     @objc private func historyClicked() {

@@ -12,9 +12,33 @@ enum ImageEncoder {
         if format == .jpg {
             properties[kCGImageDestinationLossyCompressionQuality] = jpegQuality
         }
-        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        // JPG 没有透明通道：带透明边（圆角 / 阴影）的图片先铺白底，避免变黑。
+        let source = format == .jpg ? flattenedOnWhite(image) : image
+        CGImageDestinationAddImage(destination, source, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return data as Data
+    }
+
+    static func hasTransparency(_ image: CGImage) -> Bool {
+        switch image.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast: return false
+        default: return true
+        }
+    }
+
+    /// 铺上白色背景（不带透明通道的图片原样返回）。
+    static func flattenedOnWhite(_ image: CGImage) -> CGImage {
+        guard hasTransparency(image),
+              let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: space,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { return image }
+        let rect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        context.setFillColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1))
+        context.fill(rect)
+        context.draw(image, in: rect)
+        return context.makeImage() ?? image
     }
 
     static func tiffData(for image: CGImage) -> Data? {

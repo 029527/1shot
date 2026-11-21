@@ -15,12 +15,107 @@ struct SettingsView: View {
     @State private var launchNeedsApproval = LaunchAtLogin.requiresApproval
     @State private var launchError: String?
 
+    @AppStorage(Preferences.Key.decorationEnabled) private var decorationEnabled = false
+    @AppStorage(Preferences.Key.cornerPercent) private var cornerPercent = 3.0
+    @AppStorage(Preferences.Key.shadowLength) private var shadowLength = 20.0
+
+    enum Tab: Hashable { case general, shortcuts, effects }
+
+    @State private var tab: Tab
+
+    init(tab: Tab = .general) {
+        _tab = State(initialValue: tab)
+    }
+
     var body: some View {
+        TabView(selection: $tab) {
+            generalTab.tabItem { Label("通用", systemImage: "gearshape") }.tag(Tab.general)
+            shortcutsTab.tabItem { Label("快捷键", systemImage: "keyboard") }.tag(Tab.shortcuts)
+            effectsTab.tabItem { Label("圆角与阴影", systemImage: "square.on.square.dashed") }.tag(Tab.effects)
+        }
+        .frame(width: 500)
+        .fixedSize(horizontal: false, vertical: true)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            refreshLaunchState()
+        }
+    }
+
+    // MARK: 快捷键
+
+    private var shortcutsTab: some View {
         Form {
-            Section("快捷键") {
-                KeyboardShortcuts.Recorder("截图：", name: .captureScreen)
+            Section {
+                shortcutRow("截图", name: .captureScreen,
+                            detail: "选区后显示工具栏，可以标注、贴图、识别文字，按 Enter 完成。")
+                shortcutRow("截图并复制", name: .captureAndCopy,
+                            detail: "松开鼠标（或单击窗口）就完成，直接复制到剪贴板，不显示工具栏。")
+                shortcutRow("贴图", name: .pinClipboard,
+                            detail: "把剪贴板里的图片或文字贴到桌面；刚截的图会贴回原位置。剪贴板里没有可贴的内容时，贴最近一次截图。")
+            } footer: {
+                Text("点击右侧录制新的快捷键，按 Delete 清除。与其他 App 冲突时，请在其中一边改掉。")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func shortcutRow(_ title: String, name: KeyboardShortcuts.Name, detail: String) -> some View {
+        LabeledContent {
+            KeyboardShortcuts.Recorder(for: name)
+        } label: {
+            Text(title)
+            Text(detail)
+        }
+    }
+
+    // MARK: 圆角与阴影
+
+    private var effectsTab: some View {
+        Form {
+            Section {
+                Toggle("给截图加圆角和阴影", isOn: $decorationEnabled)
+                LabeledContent("圆角") {
+                    HStack {
+                        Slider(value: $cornerPercent, in: ImageDecoration.cornerRange, step: 1)
+                        Text(verbatim: "\(Int(cornerPercent))%")
+                            .monospacedDigit()
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
+                .disabled(!decorationEnabled)
+                LabeledContent("阴影") {
+                    HStack {
+                        Slider(value: $shadowLength, in: ImageDecoration.shadowRange, step: 2)
+                        Text(verbatim: "\(Int(shadowLength)) pt")
+                            .monospacedDigit()
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
+                .disabled(!decorationEnabled)
+            } footer: {
+                Text("圆角按截图短边的百分比计算。开启后，复制和自动保存的是四周透明的 PNG；贴图和截图历史保留原图。")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
 
+            Section("预览") {
+                DecorationPreview(decoration: ImageDecoration(
+                    isEnabled: decorationEnabled,
+                    cornerRatio: cornerPercent / 100,
+                    shadowLength: shadowLength
+                ))
+                .frame(maxWidth: .infinity)
+                .frame(height: 190)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    // MARK: 通用
+
+    private var generalTab: some View {
+        Form {
             Section("完成截图后") {
                 Toggle("自动复制到剪贴板", isOn: $autoCopy)
                 Toggle("自动保存到文件", isOn: $autoSave)
@@ -73,11 +168,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480)
-        .fixedSize(horizontal: false, vertical: true)
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-            refreshLaunchState()
-        }
     }
 
     private func displayPath(_ url: URL) -> String {
@@ -118,6 +208,46 @@ struct SettingsView: View {
         launchAtLogin = LaunchAtLogin.isEnabled || LaunchAtLogin.requiresApproval
         launchNeedsApproval = LaunchAtLogin.requiresApproval
         saveDirectory = Preferences.saveDirectory
+    }
+}
+
+/// 用一张示例图实际跑一遍 `ImageDecorator`，所见即所得。
+private struct DecorationPreview: View {
+    var decoration: ImageDecoration
+
+    private static let scale: CGFloat = 2
+    private static let sample = makeSample()
+
+    var body: some View {
+        let image = ImageDecorator.apply(Self.sample, decoration: decoration, scale: Self.scale)
+        Image(nsImage: NSImage(cgImage: image, size: CGSize(width: CGFloat(image.width) / Self.scale,
+                                                            height: CGFloat(image.height) / Self.scale)))
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+    }
+
+    /// 示例截图：浅色窗口样式（标题栏 + 几行内容），200 × 120 pt。
+    private static func makeSample() -> CGImage {
+        let width = Int(200 * scale), height = Int(120 * scale)
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.scaleBy(x: scale, y: scale)
+        context.setFillColor(CGColor(srgbRed: 0.98, green: 0.98, blue: 0.99, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 200, height: 120))
+        context.setFillColor(CGColor(srgbRed: 0.9, green: 0.91, blue: 0.93, alpha: 1))
+        context.fill(CGRect(x: 0, y: 98, width: 200, height: 22))
+        for (index, color) in [(1.0, 0.37, 0.34), (1.0, 0.74, 0.18), (0.16, 0.79, 0.25)].enumerated() {
+            context.setFillColor(CGColor(srgbRed: color.0, green: color.1, blue: color.2, alpha: 1))
+            context.fillEllipse(in: CGRect(x: 10 + CGFloat(index) * 14, y: 104, width: 10, height: 10))
+        }
+        context.setFillColor(CGColor(srgbRed: 0.2, green: 0.47, blue: 0.96, alpha: 1))
+        context.fill(CGRect(x: 14, y: 70, width: 90, height: 12))
+        context.setFillColor(CGColor(srgbRed: 0.8, green: 0.81, blue: 0.84, alpha: 1))
+        for row in 0..<3 {
+            context.fill(CGRect(x: 14, y: 50 - CGFloat(row) * 16, width: CGFloat(170 - row * 30), height: 8))
+        }
+        return context.makeImage()!
     }
 }
 

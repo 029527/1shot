@@ -11,8 +11,9 @@ final class PinManager {
 
     /// 把图片贴到桌面。`frame` 为 AppKit 全局坐标（pt），通常就是截图时的选区，贴图出现在原位。
     @discardableResult
-    func pin(_ image: CGImage, frame: CGRect) -> PinWindow {
+    func pin(_ image: CGImage, frame: CGRect, text: String? = nil) -> PinWindow {
         let window = PinWindow(image: image, frame: frame)
+        window.text = text
         window.onClose = { [weak self, weak window] in
             guard let self, let window else { return }
             windows.removeAll { $0 === window }
@@ -34,6 +35,26 @@ final class PinManager {
         pin(image, frame: CGRect(origin: origin, size: size))
     }
 
+    /// 贴一张 `size`（pt）大小的图片，以 `point` 为中心，保持在该屏幕可见区域内；太大时等比缩小。
+    @discardableResult
+    func pin(_ image: CGImage, size: CGSize, around point: CGPoint, text: String? = nil) -> PinWindow {
+        let screen = NSScreen.screens.first { $0.frame.contains(point) }?.visibleFrame
+            ?? NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let frame = Self.frame(for: size, around: point, in: screen)
+        return pin(image, frame: frame, text: text)
+    }
+
+    /// 以 `point` 为中心放置，不超过可见区域的 80%，并整体放进可见区域。
+    nonisolated static func frame(for size: CGSize, around point: CGPoint, in visible: CGRect) -> CGRect {
+        let limit = CGSize(width: visible.width * 0.8, height: visible.height * 0.8)
+        let ratio = min(1, limit.width / max(size.width, 1), limit.height / max(size.height, 1))
+        let fitted = CGSize(width: (size.width * ratio).rounded(), height: (size.height * ratio).rounded())
+        var origin = CGPoint(x: point.x - fitted.width / 2, y: point.y - fitted.height / 2)
+        origin.x = min(max(origin.x, visible.minX), visible.maxX - fitted.width)
+        origin.y = min(max(origin.y, visible.minY), visible.maxY - fitted.height)
+        return CGRect(origin: origin, size: fitted)
+    }
+
     func closeAll() {
         for window in windows { window.close() }
         windows.removeAll()
@@ -45,6 +66,8 @@ final class PinWindow: NSPanel {
     var onClose: (() -> Void)?
 
     let image: CGImage
+    /// 贴的是文字时保存原文，「复制」复制文字。
+    var text: String?
     /// 原始尺寸（pt）。
     let originalSize: CGSize
     private let pinView: PinView
@@ -122,7 +145,13 @@ final class PinWindow: NSPanel {
     // MARK: 动作
 
     @objc func copyImage(_ sender: Any?) {
-        PasteboardWriter.write(image)
+        if let text {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+        } else {
+            PasteboardWriter.write(image)
+        }
         pinView.showZoomBadge("已复制")
     }
 
@@ -167,7 +196,7 @@ final class PinWindow: NSPanel {
             item.target = self
             menu.addItem(item)
         }
-        add("复制", #selector(copyImage(_:)), "c")
+        add(text == nil ? "复制" : "复制文字", #selector(copyImage(_:)), "c")
         add("另存为…", #selector(saveImage(_:)), "s")
         menu.addItem(.separator())
         add("原始大小", #selector(resetZoom(_:)), "0")

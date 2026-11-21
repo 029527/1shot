@@ -12,6 +12,8 @@ final class OverlayController {
 
     /// 遮罩正在显示。
     private(set) var isPresenting = false
+    /// 本次截图的模式。
+    private(set) var mode: CaptureMode = .annotate
     private var panels: [CGDirectDisplayID: OverlayPanel] = [:]
     private(set) var capture: CaptureResult?
     var model: SelectionModel?
@@ -83,9 +85,10 @@ final class OverlayController {
     // MARK: 显示 / 关闭
 
     /// 显示定格遮罩。`stopwatch` 从按下快捷键开始计时。
-    func present(_ capture: CaptureResult, stopwatch: Stopwatch) {
+    func present(_ capture: CaptureResult, mode: CaptureMode = .annotate, stopwatch: Stopwatch) {
         let beforePresent = stopwatch.elapsedMs
         self.capture = capture
+        self.mode = mode
         isPresenting = true
         shiftTogglePending = false
         magnifierFeedback = nil
@@ -213,10 +216,11 @@ final class OverlayController {
         commitPendingEdits()
         guard let (image, anchor, scale) = composeImage() else { return }
         model?.finish()
-        Log.overlay.notice("完成：\(image.width, privacy: .public) × \(image.height, privacy: .public) px")
+        let quick = mode == .quickCopy
+        Log.overlay.notice("完成\(quick ? "（截图并复制）" : "", privacy: .public)：\(image.width, privacy: .public) × \(image.height, privacy: .public) px")
         hidePanels()
         endSession()
-        OutputPipeline.deliver(image, anchor: anchor, scale: scale)
+        OutputPipeline.deliver(image, anchor: anchor, scale: scale, forceCopy: quick)
     }
 
     /// 另存为：关闭遮罩后弹出保存面板，同时复制到剪贴板。
@@ -576,6 +580,11 @@ extension OverlayController: OverlayViewDelegate {
             return
         }
         model?.mouseUp(at: point)
+        // 「截图并复制」：选区一确定就完成。
+        if let state = model?.state, mode.finishesOnSelection(state) {
+            finish()
+            return
+        }
         render()
         updateCursor()
     }
