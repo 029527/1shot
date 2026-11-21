@@ -8,6 +8,7 @@ macOS 菜单栏截图工具（Swift + AppKit，macOS 14+）：截图、标注、
 
 ```bash
 brew tap 029527/1shot https://github.com/029527/1shot
+brew trust --tap 029527/1shot     # 新版 Homebrew 需要先信任第三方 tap
 brew install --cask 1shot
 ```
 
@@ -102,4 +103,4 @@ git push origin v0.2.0
 | `MACOS_DEVELOPMENT_TEAM` | Team ID |
 | `NOTARY_APPLE_ID` / `NOTARY_PASSWORD` | 可选：Apple ID 与 App 专用密码，配合 Developer ID 证书自动公证 |
 
-使用固定证书签名后，更新不再需要重新授权屏幕录制；使用 Developer ID 并公证后，`Casks/1shot.rb` 里去掉隔离属性的 `postflight` 可以删除。
+使用固定证书签名后，更新不再需要重新授权屏幕录制；使用 Developer ID 并公证后，`Casks/1shot.rb` 里去掉隔离属性的 `postflight_steps` 可以删除。
