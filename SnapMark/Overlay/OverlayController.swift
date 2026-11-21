@@ -21,6 +21,7 @@ final class OverlayController {
     let toolbar = ToolbarView(groups: [
         [.rectangle, .ellipse, .arrow, .pen, .highlighter, .text, .counter, .mosaic],
         [.undo, .redo],
+        [.longScreenshot, .ocr, .pin],
         [.save, .cancel, .done],
     ])
     let annotations = AnnotationController()
@@ -222,6 +223,22 @@ final class OverlayController {
             self?.endSession()
         }
     }
+
+    /// 贴图到桌面：在选区原位置置顶显示合成后的图片。
+    func pinToDesktop() {
+        commitPendingEdits()
+        guard let (image, anchor) = composeImage() else { return }
+        model?.finish()
+        hidePanels()
+        endSession()
+        PinManager.shared.pin(image, frame: anchor)
+    }
+
+    /// 识别选区里的文字（Vision）。
+    func recognizeText() {}
+
+    /// 长截图：关闭遮罩，在选区位置滚动拼接。
+    func startLongScreenshot() {}
 
     // MARK: 绘制
 
@@ -608,6 +625,12 @@ extension OverlayController: OverlayViewDelegate {
             if hasSelection { finish() }
         case .saveAs:
             if hasSelection { saveAs() }
+        case .pin:
+            if hasSelection { pinToDesktop() }
+        case .ocr:
+            if hasSelection { recognizeText() }
+        case .longScreenshot:
+            if hasSelection { startLongScreenshot() }
         case .undo, .redo:
             if annotations.isEditingText {
                 annotations.undoInTextField(redo: command == .redo)
@@ -644,6 +667,9 @@ extension OverlayController: ToolbarViewDelegate {
         case .done: finish()
         case .undo: annotations.undo()
         case .redo: annotations.redo()
+        case .pin: pinToDesktop()
+        case .ocr: recognizeText()
+        case .longScreenshot: startLongScreenshot()
         default:
             if let tool = AnnotationTool(item: item) { annotations.toggle(tool) }
         }

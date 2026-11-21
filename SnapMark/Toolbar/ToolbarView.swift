@@ -4,6 +4,7 @@ import AppKit
 enum ToolbarItem: CaseIterable, Hashable {
     case rectangle, ellipse, arrow, pen, highlighter, text, counter, mosaic
     case undo, redo
+    case longScreenshot, ocr, pin
     case save, cancel, done
 
     var symbolName: String {
@@ -16,6 +17,9 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .counter: return "1.circle"
         case .text: return "t.square"
         case .mosaic: return "checkerboard.rectangle"
+        case .longScreenshot: return "arrow.up.and.down.text.horizontal"
+        case .ocr: return "text.viewfinder"
+        case .pin: return "pin"
         case .undo: return "arrow.uturn.backward"
         case .redo: return "arrow.uturn.forward"
         case .save: return "square.and.arrow.down"
@@ -34,6 +38,9 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .counter: return "序号"
         case .text: return "文字"
         case .mosaic: return "马赛克"
+        case .longScreenshot: return "长截图"
+        case .ocr: return "识别文字"
+        case .pin: return "贴图到桌面"
         case .undo: return "撤销"
         case .redo: return "重做"
         case .save: return "保存"
@@ -53,6 +60,9 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .counter: return "N"
         case .text: return "T"
         case .mosaic: return "M"
+        case .longScreenshot: return "⌘L"
+        case .ocr: return "⌘R"
+        case .pin: return "⌘T"
         case .undo: return "⌘Z"
         case .redo: return "⇧⌘Z"
         case .save: return "⌘S"

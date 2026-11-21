@@ -26,6 +26,12 @@ enum OverlayCommand {
     case undo
     /// ⇧⌘Z
     case redo
+    /// ⌘T：贴图到桌面。
+    case pin
+    /// ⌘R：识别文字。
+    case ocr
+    /// ⌘L：长截图。
+    case longScreenshot
 
     init?(keyEquivalent event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -35,6 +41,9 @@ enum OverlayCommand {
         case ("s", false): self = .saveAs
         case ("z", false): self = .undo
         case ("z", true): self = .redo
+        case ("t", false): self = .pin
+        case ("r", false): self = .ocr
+        case ("l", false): self = .longScreenshot
         default: return nil
         }
     }
