@@ -140,6 +140,8 @@ final class CaptureService {
             configuration.scalesToFit = false
             configuration.captureResolution = .best
             configuration.capturesAudio = false
+            // 统一用 sRGB：放大镜取色、导出、粘贴到其他 App 时颜色一致。
+            configuration.colorSpaceName = CGColorSpace.sRGB
 
             jobs.append(Job(displayID: displayID, geometry: geometry, filter: filter, configuration: configuration))
         }

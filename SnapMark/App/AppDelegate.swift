@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !Self.isRunningTests else { return }
 
+        Preferences.registerDefaults()
         NSApp.mainMenu = MainMenu.make()
 
         statusBar = StatusBarController(actions: .init(

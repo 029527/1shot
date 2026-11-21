@@ -4,17 +4,21 @@ import AppKit
 /// 把输入事件交给 `SelectionModel`，再把结果画到每块屏幕上。
 @MainActor
 final class OverlayController {
-    /// 遮罩关闭（完成或取消）后回调。
+    /// 截图会话结束（完成或取消，包括另存为面板关闭）后回调。
     var onDismiss: (() -> Void)?
 
+    /// 遮罩正在显示。
     private(set) var isPresenting = false
     private var panels: [CGDirectDisplayID: OverlayPanel] = [:]
-    private var capture: CaptureResult?
-    private var model: SelectionModel?
+    private(set) var capture: CaptureResult?
+    var model: SelectionModel?
     private var previousApp: NSRunningApplication?
 
     /// 最近一次的光标位置（AppKit 全局坐标）。
-    private var mouse: CGPoint = .zero
+    private(set) var mouse: CGPoint = .zero
+
+    // 工具栏
+    let toolbar = ToolbarView(groups: [[.save, .cancel, .done]])
 
     // 放大镜状态
     private var colorFormat: ColorFormat = .hex
@@ -22,6 +26,11 @@ final class OverlayController {
     private var magnifierFeedback: String?
     private var feedbackResetWork: DispatchWorkItem?
     private var currentColor: PixelColor?
+
+    init() {
+        toolbar.delegate = self
+        toolbar.isHidden = true
+    }
 
     // MARK: 窗口准备
 
@@ -85,6 +94,7 @@ final class OverlayController {
         )
         model.begin(at: mouse)
         self.model = model
+        sessionDidBegin()
 
         var keyPanel: OverlayPanel?
         for display in capture.displays {
@@ -127,33 +137,90 @@ final class OverlayController {
         }
     }
 
-    /// 关闭遮罩，把焦点还给之前的 App。
+    /// 取消截图：关闭遮罩，把焦点还给之前的 App。
     func dismiss() {
         guard isPresenting else { return }
+        hidePanels()
+        endSession()
+    }
+
+    /// 隐藏遮罩并释放截图（会话可能还没结束，比如另存为面板还开着）。
+    private func hidePanels() {
+        guard isPresenting else { return }
         isPresenting = false
+        sessionWillEnd()
 
         for panel in panels.values {
             panel.orderOut(nil)
             panel.overlayView.clear()
         }
+        toolbar.isHidden = true
+        toolbar.removeFromSuperview()
         capture = nil
         model = nil
         feedbackResetWork?.cancel()
         feedbackResetWork = nil
         NSCursor.arrow.set()
+    }
 
+    private func endSession() {
         if let previousApp, !previousApp.isTerminated {
             previousApp.activate()
         }
         previousApp = nil
-
         onDismiss?()
+    }
+
+    // MARK: 完成 / 另存为
+
+    /// 选区所在屏幕的截图与选区（本地坐标）。
+    var activeSelection: (display: DisplayCapture, local: CGRect, global: CGRect)? {
+        guard let capture, let model, let selection = model.selection,
+              let index = model.selectionScreenIndex, capture.displays.indices.contains(index)
+        else { return nil }
+        let display = capture.displays[index]
+        return (display, display.geometry.localRect(fromGlobal: selection), selection)
+    }
+
+    /// 合成最终图片（截图 + 所有标注）。
+    private func composeImage() -> (image: CGImage, anchor: CGRect)? {
+        guard let active = activeSelection else { return nil }
+        let image = ImageExporter.compose(
+            image: active.display.image,
+            geometry: active.display.geometry,
+            selection: active.local,
+            drawOverlays: { [weak self] context in self?.drawAnnotations(in: context) }
+        )
+        guard let image else { return nil }
+        return (image, active.global)
+    }
+
+    /// 完成：合成 → 剪贴板 / 保存 → 关闭遮罩 → 提示。
+    func finish() {
+        commitPendingEdits()
+        guard let (image, anchor) = composeImage() else { return }
+        model?.finish()
+        Log.overlay.notice("完成：\(image.width, privacy: .public) × \(image.height, privacy: .public) px")
+        hidePanels()
+        endSession()
+        OutputPipeline.deliver(image, anchor: anchor)
+    }
+
+    /// 另存为：关闭遮罩后弹出保存面板，同时复制到剪贴板。
+    func saveAs() {
+        commitPendingEdits()
+        guard let (image, anchor) = composeImage() else { return }
+        model?.finish()
+        hidePanels()
+        OutputPipeline.saveAs(image, anchor: anchor) { [weak self] in
+            self?.endSession()
+        }
     }
 
     // MARK: 绘制
 
-    /// 根据模型状态更新所有屏幕上的选区装饰和放大镜。
-    private func render() {
+    /// 根据模型状态更新所有屏幕上的选区装饰、工具栏和放大镜。
+    func render() {
         guard let capture, let model else { return }
 
         let isHovering = model.state == .hovering
@@ -188,6 +255,33 @@ final class OverlayController {
                 view.updateMagnifier(nil, cursor: .zero)
             }
         }
+
+        layoutControls()
+    }
+
+    /// 工具栏（以及 M3 的属性条、标注画布）挂到选区所在屏幕，并按选区定位。
+    private func layoutControls() {
+        guard let model, let active = activeSelection,
+              let view = panels[active.display.displayID]?.overlayView else {
+            toolbar.isHidden = true
+            controlsDidHide()
+            return
+        }
+
+        let showToolbar = (model.state == .selected || model.state == .annotating)
+            && !model.isAdjusting && model.state != .dragging
+        if toolbar.superview !== view.controlsHost {
+            view.controlsHost.addSubview(toolbar)
+        }
+        if showToolbar {
+            let layout = ToolbarLayout.frame(size: toolbar.frame.size, selection: active.local, bounds: view.bounds)
+            toolbar.setFrameOrigin(layout.frame.origin)
+            toolbar.isHidden = false
+            controlsDidLayout(in: view, toolbarFrame: layout.frame, placement: layout.placement, selection: active.local)
+        } else {
+            toolbar.isHidden = true
+            controlsDidHide()
+        }
     }
 
     private func magnifierContent(display: DisplayCapture, localCursor: CGPoint) -> MagnifierView.Content? {
@@ -206,8 +300,23 @@ final class OverlayController {
         return !model.isLocked && (model.state == .hovering || model.state == .dragging || model.isAdjusting)
     }
 
-    private func updateCursor() {
+    /// 光标是否在工具栏 / 属性条上。
+    private var isMouseOverControls: Bool {
+        guard let host = toolbar.superview, let window = host.window else { return false }
+        let local = host.convert(window.convertPoint(fromScreen: mouse), from: nil)
+        return host.subviews.contains { !$0.isHidden && $0.frame.contains(local) }
+    }
+
+    func updateCursor() {
         guard let model else { return }
+        if isMouseOverControls {
+            NSCursor.arrow.set()
+            return
+        }
+        if let custom = annotationCursor() {
+            custom.set()
+            return
+        }
         cursor(for: model.cursorKind(at: mouse)).set()
     }
 
@@ -248,6 +357,17 @@ final class OverlayController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
         render()
     }
+
+    // MARK: 标注扩展点（M3 实现）
+
+    func sessionDidBegin() {}
+    func sessionWillEnd() {}
+    func commitPendingEdits() {}
+    func drawAnnotations(in context: CGContext) {}
+    func annotationCursor() -> NSCursor? { nil }
+    func controlsDidLayout(in view: OverlayView, toolbarFrame: CGRect, placement: ToolbarLayout.Placement,
+                           selection: CGRect) {}
+    func controlsDidHide() {}
 }
 
 // MARK: - 事件
@@ -261,16 +381,25 @@ extension OverlayController: OverlayViewDelegate {
         updateCursor()
     }
 
-    func overlayView(_ view: OverlayView, mouseDownAt point: CGPoint, clickCount: Int) {
+    func overlayView(_ view: OverlayView, mouseDownAt point: CGPoint, clickCount: Int,
+                     modifiers: NSEvent.ModifierFlags) {
         guard model != nil else { return }
         shiftTogglePending = false
         mouse = point
+
+        // 双击选区（未选中绘图工具时）：完成。
+        if clickCount == 2, let selection = model?.selection, selection.contains(point),
+           model?.state == .selected || model?.state == .annotating {
+            finish()
+            return
+        }
+
         model?.mouseDown(at: point)
         render()
         updateCursor()
     }
 
-    func overlayView(_ view: OverlayView, mouseDraggedTo point: CGPoint) {
+    func overlayView(_ view: OverlayView, mouseDraggedTo point: CGPoint, modifiers: NSEvent.ModifierFlags) {
         guard model != nil else { return }
         mouse = point
         model?.mouseDragged(to: point)
@@ -278,7 +407,7 @@ extension OverlayController: OverlayViewDelegate {
         updateCursor()
     }
 
-    func overlayView(_ view: OverlayView, mouseUpAt point: CGPoint) {
+    func overlayView(_ view: OverlayView, mouseUpAt point: CGPoint, modifiers: NSEvent.ModifierFlags) {
         guard model != nil else { return }
         mouse = point
         model?.mouseUp(at: point)
@@ -308,6 +437,11 @@ extension OverlayController: OverlayViewDelegate {
 
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
         switch event.keyCode {
+        case KeyCode.returnKey, KeyCode.keypadEnter:
+            if model?.selection != nil, model?.state == .selected || model?.state == .annotating {
+                finish()
+            }
+            return true
         case KeyCode.leftArrow: model?.nudge(dx: -step, dy: 0)
         case KeyCode.rightArrow: model?.nudge(dx: step, dy: 0)
         case KeyCode.upArrow: model?.nudge(dx: 0, dy: step)
@@ -339,9 +473,36 @@ extension OverlayController: OverlayViewDelegate {
         }
     }
 
+    func overlayView(_ view: OverlayView, perform command: OverlayCommand) -> Bool {
+        guard let model else { return false }
+        let hasSelection = model.selection != nil && (model.state == .selected || model.state == .annotating)
+        switch command {
+        case .finish:
+            if hasSelection { finish() }
+        case .saveAs:
+            if hasSelection { saveAs() }
+        case .undo, .redo:
+            break
+        }
+        return true
+    }
+
     func overlayViewDidPressEscape(_ view: OverlayView) {
         Log.overlay.notice("Esc：退出截图")
         dismiss()
+    }
+}
+
+// MARK: - 工具栏
+
+extension OverlayController: ToolbarViewDelegate {
+    func toolbar(_ toolbar: ToolbarView, didClick item: ToolbarItem) {
+        switch item {
+        case .save: saveAs()
+        case .cancel: dismiss()
+        case .done: finish()
+        default: break
+        }
     }
 }
 

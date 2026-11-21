@@ -5,13 +5,39 @@ import QuartzCore
 @MainActor
 protocol OverlayViewDelegate: AnyObject {
     func overlayView(_ view: OverlayView, mouseMovedTo point: CGPoint)
-    func overlayView(_ view: OverlayView, mouseDownAt point: CGPoint, clickCount: Int)
-    func overlayView(_ view: OverlayView, mouseDraggedTo point: CGPoint)
-    func overlayView(_ view: OverlayView, mouseUpAt point: CGPoint)
+    func overlayView(_ view: OverlayView, mouseDownAt point: CGPoint, clickCount: Int, modifiers: NSEvent.ModifierFlags)
+    func overlayView(_ view: OverlayView, mouseDraggedTo point: CGPoint, modifiers: NSEvent.ModifierFlags)
+    func overlayView(_ view: OverlayView, mouseUpAt point: CGPoint, modifiers: NSEvent.ModifierFlags)
     func overlayView(_ view: OverlayView, rightMouseDownAt point: CGPoint)
     func overlayView(_ view: OverlayView, keyDown event: NSEvent) -> Bool
     func overlayView(_ view: OverlayView, flagsChanged event: NSEvent)
+    /// 处理 ⌘ 组合键命令；返回 false 表示交给系统（比如正在输入文字时的 ⌘C）。
+    func overlayView(_ view: OverlayView, perform command: OverlayCommand) -> Bool
     func overlayViewDidPressEscape(_ view: OverlayView)
+}
+
+/// 遮罩上的 ⌘ 组合键命令。
+enum OverlayCommand {
+    /// ⌘C：完成。
+    case finish
+    /// ⌘S：另存为。
+    case saveAs
+    /// ⌘Z
+    case undo
+    /// ⇧⌘Z
+    case redo
+
+    init?(keyEquivalent event: NSEvent) {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard flags.contains(.command), !flags.contains(.control), !flags.contains(.option) else { return nil }
+        switch (event.charactersIgnoringModifiers?.lowercased(), flags.contains(.shift)) {
+        case ("c", false): self = .finish
+        case ("s", false): self = .saveAs
+        case ("z", false): self = .undo
+        case ("z", true): self = .redo
+        default: return nil
+        }
+    }
 }
 
 /// 一块屏幕上要画的选区装饰（屏幕本地坐标）。
@@ -39,6 +65,10 @@ final class OverlayView: NSView {
     static let handleRadius: CGFloat = 4
 
     private let canvas = CanvasView()
+    /// 标注画布挂在这里（只在选区所在屏幕上）。
+    let annotationHost = PassthroughView()
+    /// 工具栏、属性条、文字输入框挂在这里。
+    let controlsHost = PassthroughView()
     let magnifier = MagnifierView(frame: CGRect(origin: .zero, size: MagnifierView.size))
 
     private(set) var chrome = OverlayChrome()
@@ -51,6 +81,12 @@ final class OverlayView: NSView {
         canvas.frame = bounds
         canvas.autoresizingMask = [.width, .height]
         addSubview(canvas)
+
+        for host in [annotationHost, controlsHost] {
+            host.frame = bounds
+            host.autoresizingMask = [.width, .height]
+            addSubview(host)
+        }
 
         magnifier.isHidden = true
         addSubview(magnifier)
@@ -126,16 +162,30 @@ final class OverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        delegate?.overlayView(self, mouseDownAt: globalPoint(event), clickCount: event.clickCount)
+        delegate?.overlayView(self, mouseDownAt: globalPoint(event), clickCount: event.clickCount,
+                              modifiers: event.modifierFlags)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        delegate?.overlayView(self, mouseDraggedTo: globalPoint(event))
+        delegate?.overlayView(self, mouseDraggedTo: globalPoint(event), modifiers: event.modifierFlags)
     }
 
     override func mouseUp(with event: NSEvent) {
-        delegate?.overlayView(self, mouseUpAt: globalPoint(event))
+        delegate?.overlayView(self, mouseUpAt: globalPoint(event), modifiers: event.modifierFlags)
     }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if let command = OverlayCommand(keyEquivalent: event),
+           delegate?.overlayView(self, perform: command) == true {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    // 主菜单「编辑」里的 ⌘C / ⌘Z 也可能先走到这里（响应链）。
+    @objc func copy(_ sender: Any?) { _ = delegate?.overlayView(self, perform: .finish) }
+    @objc func undo(_ sender: Any?) { _ = delegate?.overlayView(self, perform: .undo) }
+    @objc func redo(_ sender: Any?) { _ = delegate?.overlayView(self, perform: .redo) }
 
     override func rightMouseDown(with event: NSEvent) {
         delegate?.overlayView(self, rightMouseDownAt: globalPoint(event))
@@ -156,6 +206,14 @@ final class OverlayView: NSView {
 
     func handleEscape() {
         delegate?.overlayViewDidPressEscape(self)
+    }
+}
+
+/// 透明容器：自己不接收点击，只让子视图接收。
+final class PassthroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hit = super.hitTest(point)
+        return hit === self ? nil : hit
     }
 }
 
