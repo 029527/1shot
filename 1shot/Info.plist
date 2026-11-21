@@ -33,5 +33,7 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
+	<key>OneShotUpdateRepository</key>
+	<string>029527/1shot</string>
 </dict>
 </plist>

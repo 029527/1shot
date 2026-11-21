@@ -8,6 +8,7 @@ final class StatusBarController: NSObject {
         var capture: () -> Void
         var captureAndCopy: () -> Void
         var pinClipboard: () -> Void
+        var checkForUpdates: () -> Void
         var openSaveDirectory: () -> Void
         var openHistory: () -> Void
         var openSettings: () -> Void
@@ -55,6 +56,10 @@ final class StatusBarController: NSObject {
         history.target = self
         menu.addItem(history)
 
+        let update = NSMenuItem(title: String(localized: "检查更新…"), action: #selector(checkForUpdatesClicked), keyEquivalent: "")
+        update.target = self
+        menu.addItem(update)
+
         let open = NSMenuItem(title: String(localized: "打开保存目录"), action: #selector(openSaveDirectoryClicked), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
@@ -95,6 +100,10 @@ final class StatusBarController: NSObject {
     @objc private func openSaveDirectoryClicked() {
         // 等菜单完全收起后再执行：菜单还在收起时激活 App 会失败，窗口会被压在其他 App 后面。
         DispatchQueue.main.async { [actions] in actions.openSaveDirectory() }
+    }
+
+    @objc private func checkForUpdatesClicked() {
+        DispatchQueue.main.async { [actions] in actions.checkForUpdates() }
     }
 
     @objc private func settingsClicked() {

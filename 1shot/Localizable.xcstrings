@@ -1,12 +1,42 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "%@ 已下载，空闲或退出时安装": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ downloaded. It will install when 1shot is idle or quits."
+          }
+        }
+      }
+    },
     "%@（%@）": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "1shot %@ 已下载好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1shot %@ Is Ready"
+          }
+        }
+      }
+    },
+    "1shot %@ 是目前的最新版本。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1shot %@ is the latest version."
           }
         }
       }
@@ -63,6 +93,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "截图"
+          }
+        }
+      }
+    },
+    "上次检查：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last checked: %@"
           }
         }
       }
@@ -287,6 +327,16 @@
         }
       }
     },
+    "前往下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
+          }
+        }
+      }
+    },
     "前往允许": {
       "localizations": {
         "en": {
@@ -323,6 +373,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Actual Size"
+          }
+        }
+      }
+    },
+    "发现新版本 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %@ available"
+          }
+        }
+      }
+    },
+    "发现新版本 1shot %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1shot %@ Is Available"
           }
         }
       }
@@ -427,6 +497,16 @@
         }
       }
     },
+    "在后台下载并校验，1shot 空闲或退出时安装，不打断你。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads and verifies in the background, then installs when 1shot is idle or quits."
+          }
+        }
+      }
+    },
     "在访达中打开": {
       "localizations": {
         "en": {
@@ -523,6 +603,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Large text"
+          }
+        }
+      }
+    },
+    "好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "安装包内容不正确：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The update package is invalid: %@"
+          }
+        }
+      }
+    },
+    "安装包校验失败（SHA-256 不一致）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The update failed verification (SHA-256 mismatch)."
           }
         }
       }
@@ -667,6 +777,26 @@
         }
       }
     },
+    "已是最新版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’re Up to Date"
+          }
+        }
+      }
+    },
+    "已更新到 1shot %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated to 1shot %@"
+          }
+        }
+      }
+    },
     "已自动复制全部文字，可编辑后再复制": {
       "localizations": {
         "en": {
@@ -723,6 +853,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Intensity"
+          }
+        }
+      }
+    },
+    "当前版本 %@。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You have version %@."
           }
         }
       }
@@ -837,6 +977,16 @@
         }
       }
     },
+    "打开发布页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Releases Page"
+          }
+        }
+      }
+    },
     "打开截图历史…": {
       "localizations": {
         "en": {
@@ -947,6 +1097,56 @@
         }
       }
     },
+    "新版本的代码签名无效。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new version’s code signature is invalid."
+          }
+        }
+      }
+    },
+    "新版本的签名与当前版本不是同一个开发者。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new version is signed by a different developer."
+          }
+        }
+      }
+    },
+    "新版本缺少安装包：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The release is missing its package: %@"
+          }
+        }
+      }
+    },
+    "新版本缺少校验文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The release is missing its checksum file."
+          }
+        }
+      }
+    },
+    "无法读取版本信息。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t read the release information."
+          }
+        }
+      }
+    },
     "显示完成提示": {
       "localizations": {
         "en": {
@@ -963,6 +1163,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Change…"
+          }
+        }
+      }
+    },
+    "更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
           }
         }
       }
@@ -1017,6 +1227,36 @@
         }
       }
     },
+    "检查更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates"
+          }
+        }
+      }
+    },
+    "检查更新…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates…"
+          }
+        }
+      }
+    },
+    "检查更新失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t Check for Updates"
+          }
+        }
+      }
+    },
     "椭圆": {
       "localizations": {
         "en": {
@@ -1047,6 +1287,36 @@
         }
       }
     },
+    "正在下载… %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading… %@"
+          }
+        }
+      }
+    },
+    "正在检查…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking…"
+          }
+        }
+      }
+    },
+    "每天检查一次 GitHub 上的新版本。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks GitHub for a new version once a day."
+          }
+        }
+      }
+    },
     "水印": {
       "localizations": {
         "en": {
@@ -1063,6 +1333,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No display available for capturing."
+          }
+        }
+      }
+    },
+    "没有权限替换当前 App，请手动下载安装。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1shot can’t replace itself here. Please download and install it manually."
           }
         }
       }
@@ -1147,6 +1427,16 @@
         }
       }
     },
+    "现在重启完成更新？也可以等 1shot 空闲或退出时自动安装。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart now to finish updating? Otherwise it installs automatically when 1shot is idle or quits."
+          }
+        }
+      }
+    },
     "画笔": {
       "localizations": {
         "en": {
@@ -1203,6 +1493,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Window"
+          }
+        }
+      }
+    },
+    "立即更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update Now"
           }
         }
       }
@@ -1337,6 +1637,16 @@
         }
       }
     },
+    "自动下载并安装": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download and install automatically"
+          }
+        }
+      }
+    },
     "自动保存到文件": {
       "localizations": {
         "en": {
@@ -1357,6 +1667,16 @@
         }
       }
     },
+    "自动检查更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates automatically"
+          }
+        }
+      }
+    },
     "荧光笔": {
       "localizations": {
         "en": {
@@ -1373,6 +1693,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Blue"
+          }
+        }
+      }
+    },
+    "解压安装包失败。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t unpack the update."
           }
         }
       }
@@ -1487,6 +1817,16 @@
         }
       }
     },
+    "跳过此版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip This Version"
+          }
+        }
+      }
+    },
     "辅助功能": {
       "localizations": {
         "en": {
@@ -1497,12 +1837,32 @@
         }
       }
     },
+    "还没有发布过版本。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No release has been published yet."
+          }
+        }
+      }
+    },
     "还没有截图历史": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "No Screenshot History Yet"
+          }
+        }
+      }
+    },
+    "还没有检查过更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never checked for updates"
           }
         }
       }

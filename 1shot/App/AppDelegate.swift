@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             capture: { [weak self] in self?.startCapture() },
             captureAndCopy: { [weak self] in self?.startCapture(mode: .quickCopy) },
             pinClipboard: { [weak self] in self?.pinClipboard() },
+            checkForUpdates: { Task { await UpdateService.shared.check(userInitiated: true) } },
             openSaveDirectory: { [weak self] in self?.openSaveDirectory() },
             openHistory: { [weak self] in self?.historyWindow.show() },
             openSettings: { [weak self] in self?.settingsWindow.show() }
@@ -60,7 +61,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        UpdateService.shared.isBusy = { [weak self] in
+            guard let self else { return true }
+            let hasWindow = NSApp.windows.contains { $0.isVisible && $0.level == .normal }
+            return isCapturing || overlay.isPresenting || LongScreenshotController.shared.isActive
+                || PinManager.shared.count > 0 || hasWindow
+        }
+        UpdateService.shared.start()
+
         Log.app.notice("1shot 已启动，屏幕录制权限：\(PermissionChecker.hasScreenRecordingAccess, privacy: .public)")
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // 有下载好的更新：退出时替换。
+        UpdateService.shared.installOnQuit()
     }
 
     // MARK: 截图

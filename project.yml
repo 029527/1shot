@@ -43,6 +43,8 @@ targets:
         LSApplicationCategoryType: public.app-category.productivity
         CFBundleLocalizations: [zh-Hans, en]
         CFBundleAllowMixedLocalizations: true
+        # 检查更新用的 GitHub 仓库（owner/repo）。
+        OneShotUpdateRepository: 029527/1shot
         NSHumanReadableCopyright: ""
     settings:
       base:

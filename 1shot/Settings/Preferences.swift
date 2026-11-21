@@ -114,6 +114,11 @@ enum Preferences {
         static let cornerPercent = "cornerPercent"
         /// 阴影长度（pt，0…60）。
         static let shadowLength = "shadowLength"
+        static let autoCheckUpdates = "autoCheckUpdates"
+        static let autoInstallUpdates = "autoInstallUpdates"
+        static let skippedUpdateVersion = "skippedUpdateVersion"
+        static let lastUpdateCheck = "lastUpdateCheck"
+        static let updatedFromVersion = "updatedFromVersion"
     }
 
     static var defaults: UserDefaults { .standard }
@@ -128,7 +133,38 @@ enum Preferences {
             Key.decorationEnabled: false,
             Key.cornerPercent: 3.0,
             Key.shadowLength: 20.0,
+            Key.autoCheckUpdates: true,
+            Key.autoInstallUpdates: true,
         ])
+    }
+
+    /// 自动检查更新（默认开，每 24 小时一次）。
+    static var autoCheckUpdates: Bool {
+        get { defaults.bool(forKey: Key.autoCheckUpdates) }
+        set { defaults.set(newValue, forKey: Key.autoCheckUpdates) }
+    }
+
+    /// 自动下载并在空闲 / 退出时安装（默认开）。
+    static var autoInstallUpdates: Bool {
+        get { defaults.bool(forKey: Key.autoInstallUpdates) }
+        set { defaults.set(newValue, forKey: Key.autoInstallUpdates) }
+    }
+
+    /// 用户选了「跳过此版本」的版本号。
+    static var skippedUpdateVersion: String? {
+        get { defaults.string(forKey: Key.skippedUpdateVersion) }
+        set { defaults.set(newValue, forKey: Key.skippedUpdateVersion) }
+    }
+
+    static var lastUpdateCheck: Date? {
+        get { defaults.object(forKey: Key.lastUpdateCheck) as? Date }
+        set { defaults.set(newValue, forKey: Key.lastUpdateCheck) }
+    }
+
+    /// 安装更新前的版本号：新版本第一次启动时提示「已更新」。
+    static var updatedFromVersion: String? {
+        get { defaults.string(forKey: Key.updatedFromVersion) }
+        set { defaults.set(newValue, forKey: Key.updatedFromVersion) }
     }
 
     /// 圆角与阴影设置。

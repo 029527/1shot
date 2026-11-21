@@ -1,6 +1,39 @@
 # 1shot
 
-macOS 菜单栏截图工具（Swift + AppKit，macOS 14+）。
+macOS 菜单栏截图工具（Swift + AppKit，macOS 14+）：截图、标注、贴图，自动复制和保存。
+
+## 安装
+
+**Homebrew**
+
+```bash
+brew tap 029527/1shot https://github.com/029527/1shot
+brew install --cask 1shot
+```
+
+卸载：`brew uninstall --cask 1shot`；连同设置、截图历史、缓存一起删除：`brew uninstall --zap --cask 1shot`。
+
+**一行命令**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/029527/1shot/main/install.sh | bash
+```
+
+- 指定版本：`… | bash -s -- --version 0.2.0`
+- 完整卸载：`… | bash -s -- --uninstall`
+
+也可以在 [Releases](https://github.com/029527/1shot/releases) 下载 zip，解压后拖进「应用程序」。
+
+首次截图时按提示在「系统设置 › 隐私与安全性 › 屏幕录制」里允许 1shot，然后重新打开它。
+
+## 更新
+
+1shot 每天自动检查一次 [GitHub Releases](https://github.com/029527/1shot/releases)：
+
+- 默认自动下载新版本，校验 SHA-256 与代码签名后，在 1shot 空闲（没在截图、没有贴图和窗口）或退出时替换并重启；
+- 关掉「自动下载并安装」时弹窗询问：立即更新 / 稍后 / 跳过此版本；
+- 菜单栏「检查更新…」或设置 › 关于里可以手动检查；
+- 只有装在「应用程序」文件夹里的 1shot 会自动替换，开发构建只提示去下载。
 
 ## 功能
 
@@ -39,4 +72,34 @@ open build/Build/Products/Debug/1shot.app
 /usr/bin/log stream --predicate 'subsystem == "com.1shot.app"'
 ```
 
-签名使用固定的 Apple Development 证书（Team `FYP4TDQ4MV`），重新编译后无需重新授权屏幕录制。
+本地签名使用固定的 Apple Development 证书（Team `FYP4TDQ4MV`），重新编译后无需重新授权屏幕录制。
+
+## 发版
+
+推送 `v*` 标签即可，GitHub Actions（`.github/workflows/release.yml`）会：
+
+1. 用 `scripts/build-release.sh` 构建通用版（arm64 + x86_64），版本号取自标签；
+2. 打包 `1shot-<版本>.zip` 与 `.sha256`，创建 Release（自动生成更新说明）；
+3. 更新 `Casks/1shot.rb` 的版本号与 SHA-256 并提交到 main。
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+本地预演：`scripts/build-release.sh 0.2.0`（输出在 `dist/`）。推送到 main 和 PR 会跑 `ci.yml`（构建 + 测试）。
+
+### 签名（可选）
+
+默认使用 ad-hoc 签名：不需要证书，但未经公证，而且每次更新后需要重新授权屏幕录制（系统按签名识别 App）。
+在仓库 Settings › Secrets and variables › Actions 里配置以下 Secrets 后，发版会改用证书签名：
+
+| Secret | 内容 |
+|---|---|
+| `MACOS_CERTIFICATE` | 证书和私钥导出的 .p12，base64 编码（`base64 -i cert.p12 \| pbcopy`） |
+| `MACOS_CERTIFICATE_PASSWORD` | .p12 的密码 |
+| `MACOS_SIGNING_IDENTITY` | 证书名称，例如 `Developer ID Application: 名字 (TEAMID)` |
+| `MACOS_DEVELOPMENT_TEAM` | Team ID |
+| `NOTARY_APPLE_ID` / `NOTARY_PASSWORD` | 可选：Apple ID 与 App 专用密码，配合 Developer ID 证书自动公证 |
+
+使用固定证书签名后，更新不再需要重新授权屏幕录制；使用 Developer ID 并公证后，`Casks/1shot.rb` 里去掉隔离属性的 `postflight` 可以删除。

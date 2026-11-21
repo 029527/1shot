@@ -461,12 +461,20 @@ private struct DecorationPreview: View {
 
 private struct AboutPane: View {
     @State private var hasScreenRecording = PermissionChecker.hasScreenRecordingAccess
+    @ObservedObject private var updates = UpdateService.shared
+    @AppStorage(Preferences.Key.autoCheckUpdates) private var autoCheck = true
+    @AppStorage(Preferences.Key.autoInstallUpdates) private var autoInstall = true
 
     private var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "—"
         let build = info?["CFBundleVersion"] as? String ?? "—"
         return String(localized: "版本 \(short)（\(build)）")
+    }
+
+    private var isDownloading: Bool {
+        if case .downloading = updates.state { return true }
+        return false
     }
 
     var body: some View {
@@ -484,6 +492,30 @@ private struct AboutPane: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
+            }
+
+            Section(String(localized: "更新")) {
+                SettingRow(title: String(localized: "自动检查更新"), detail: String(localized: "每天检查一次 GitHub 上的新版本。")) {
+                    Toggle("", isOn: $autoCheck).labelsHidden().toggleStyle(.switch)
+                }
+                SettingRow(title: String(localized: "自动下载并安装"),
+                           detail: String(localized: "在后台下载并校验，1shot 空闲或退出时安装，不打断你。")) {
+                    Toggle("", isOn: $autoInstall).labelsHidden().toggleStyle(.switch)
+                }
+                HStack {
+                    Text(verbatim: updates.statusText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
+                    if case .ready = updates.state {
+                        Button(String(localized: "立即重启")) { updates.installNow(relaunch: true) }
+                    }
+                    Button(String(localized: "检查更新")) {
+                        Task { await updates.check(userInitiated: true) }
+                    }
+                    .disabled(updates.state == .checking || isDownloading)
+                }
             }
 
             Section(String(localized: "权限")) {
