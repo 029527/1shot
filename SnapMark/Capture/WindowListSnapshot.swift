@@ -63,6 +63,17 @@ struct WindowListSnapshot: Equatable {
         windows = result
     }
 
+    /// 悬停识别用的窗口 frame（AppKit 全局坐标），从前到后。
+    ///
+    /// 只保留层级在 [0, Dock 层级) 的窗口：普通窗口、浮动面板等；
+    /// 排除 Dock、菜单栏、通知等系统层（它们常常是透明的整屏窗口）。
+    func selectableFrames(converter: CoordinateConverter) -> [CGRect] {
+        let dockLevel = Int(CGWindowLevelForKey(.dockWindow))
+        return windows
+            .filter { $0.layer >= 0 && $0.layer < dockLevel }
+            .map { converter.appKitRect(fromCG: $0.frame) }
+    }
+
     /// 包含该点（CG 全局坐标）的最前面的窗口。
     func topmostWindow(containingCG point: CGPoint) -> WindowInfo? {
         windows.first { $0.frame.contains(point) }
