@@ -32,6 +32,57 @@ protocol AnnotationShape {
     var bounds: CGRect { get }
     func draw(in context: CGContext, environment: AnnotationEnvironment)
     func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool
+
+    // MARK: 编辑（选中已有图形再修改）
+
+    /// 画出这个图形的工具（决定属性条显示什么）。
+    var tool: AnnotationTool { get }
+    /// 当前样式（属性条回显）。
+    var style: ToolStyle { get }
+    /// 换颜色 / 粗细，id 不变。
+    func restyled(_ style: ToolStyle) -> any AnnotationShape
+    /// 整体平移，id 不变。
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape
+    /// 可拖动的编辑控制点。
+    var editHandles: [CGPoint] { get }
+    /// 拖动第 `index` 个控制点到 `point`。
+    func dragging(handle index: Int, to point: CGPoint, constrain: Bool) -> any AnnotationShape
+}
+
+extension AnnotationShape {
+    var editHandles: [CGPoint] { [] }
+    func dragging(handle index: Int, to point: CGPoint, constrain: Bool) -> any AnnotationShape { self }
+}
+
+extension ToolStyle {
+    /// 由图形的实际数值反推档位和颜色序号（属性条回显用）。
+    static func matching(value: CGFloat, in levels: [CGFloat], color: PaletteColor?) -> ToolStyle {
+        let index = levels.indices.min { abs(levels[$0] - value) < abs(levels[$1] - value) } ?? 1
+        let colorIndex = color.flatMap { Palette.colors.firstIndex(of: $0) } ?? Palette.defaultIndex
+        return ToolStyle(size: SizeLevel(rawValue: index) ?? .medium, colorIndex: colorIndex)
+    }
+}
+
+/// 拖动矩形类控制点：被拖的边移到 `point`，对边固定；越过对边时翻转。控制点顺序同 `SelectionHandle.allCases`。
+func resizedRect(_ rect: CGRect, handleIndex: Int, to point: CGPoint, square: Bool) -> CGRect {
+    guard SelectionHandle.allCases.indices.contains(handleIndex) else { return rect }
+    let handle = SelectionHandle.allCases[handleIndex]
+    var minX = rect.minX, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
+    if handle.movesMinX { minX = point.x }
+    if handle.movesMaxX { maxX = point.x }
+    if handle.movesMinY { minY = point.y }
+    if handle.movesMaxY { maxY = point.y }
+    var result = CGRect(x: min(minX, maxX), y: min(minY, maxY), width: abs(maxX - minX), height: abs(maxY - minY))
+    if square, handle.movesMinX || handle.movesMaxX, handle.movesMinY || handle.movesMaxY {
+        // 角点 + ⇧：以对角为锚点保持正方形。
+        let anchor = CGPoint(x: handle.movesMinX ? rect.maxX : rect.minX, y: handle.movesMinY ? rect.maxY : rect.minY)
+        result = ShapeBuilder.rect(from: anchor, to: point, square: true)
+    }
+    return result
+}
+
+private func offset(_ points: [CGPoint], _ dx: CGFloat, _ dy: CGFloat) -> [CGPoint] {
+    points.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
 }
 
 extension AnnotationShape {
@@ -377,5 +428,120 @@ struct CounterShape: AnnotationShape {
 
     func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool {
         hypot(point.x - center.x, point.y - center.y) <= diameter / 2 + tolerance
+    }
+}
+
+// MARK: - 编辑实现
+
+extension RectangleShape {
+    var tool: AnnotationTool { .rectangle }
+    var style: ToolStyle { .matching(value: lineWidth, in: ToolStyle.lineWidths, color: color) }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self; copy.color = style.color; copy.lineWidth = style.lineWidth; return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self; copy.rect = rect.offsetBy(dx: dx, dy: dy); return copy
+    }
+    var editHandles: [CGPoint] { SelectionHandle.allCases.map { $0.point(in: rect) } }
+    func dragging(handle index: Int, to point: CGPoint, constrain: Bool) -> any AnnotationShape {
+        var copy = self; copy.rect = resizedRect(rect, handleIndex: index, to: point, square: constrain); return copy
+    }
+}
+
+extension EllipseShape {
+    var tool: AnnotationTool { .ellipse }
+    var style: ToolStyle { .matching(value: lineWidth, in: ToolStyle.lineWidths, color: color) }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self; copy.color = style.color; copy.lineWidth = style.lineWidth; return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self; copy.rect = rect.offsetBy(dx: dx, dy: dy); return copy
+    }
+    var editHandles: [CGPoint] { SelectionHandle.allCases.map { $0.point(in: rect) } }
+    func dragging(handle index: Int, to point: CGPoint, constrain: Bool) -> any AnnotationShape {
+        var copy = self; copy.rect = resizedRect(rect, handleIndex: index, to: point, square: constrain); return copy
+    }
+}
+
+extension ArrowShape {
+    var tool: AnnotationTool { .arrow }
+    var style: ToolStyle { .matching(value: lineWidth, in: ToolStyle.lineWidths, color: color) }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self; copy.color = style.color; copy.lineWidth = style.lineWidth; return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self
+        copy.start = CGPoint(x: start.x + dx, y: start.y + dy)
+        copy.end = CGPoint(x: end.x + dx, y: end.y + dy)
+        return copy
+    }
+    /// 起点、终点。
+    var editHandles: [CGPoint] { [start, end] }
+    func dragging(handle index: Int, to point: CGPoint, constrain: Bool) -> any AnnotationShape {
+        var copy = self
+        if index == 0 {
+            copy.start = constrain ? ShapeBuilder.snap(from: end, to: point) : point
+        } else {
+            copy.end = constrain ? ShapeBuilder.snap(from: start, to: point) : point
+        }
+        return copy
+    }
+}
+
+extension PenShape {
+    var tool: AnnotationTool { .pen }
+    var style: ToolStyle { .matching(value: lineWidth, in: ToolStyle.lineWidths, color: color) }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self; copy.color = style.color; copy.lineWidth = style.lineWidth; return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self; copy.points = offset(points, dx, dy); return copy
+    }
+}
+
+extension HighlighterShape {
+    var tool: AnnotationTool { .highlighter }
+    var style: ToolStyle { .matching(value: lineWidth, in: ToolStyle.highlighterWidths, color: color) }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self; copy.color = style.color; copy.lineWidth = style.highlighterWidth; return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self; copy.points = offset(points, dx, dy); return copy
+    }
+}
+
+extension MosaicShape {
+    var tool: AnnotationTool { .mosaic }
+    var style: ToolStyle { .matching(value: brushWidth, in: ToolStyle.mosaicBrushWidths, color: nil) }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self
+        copy.brushWidth = style.mosaicBrushWidth
+        copy.blockSize = style.mosaicBlockSize
+        return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self; copy.points = offset(points, dx, dy); return copy
+    }
+}
+
+extension TextShape {
+    var tool: AnnotationTool { .text }
+    var style: ToolStyle { .matching(value: fontSize, in: ToolStyle.fontSizes, color: color) }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self; copy.color = style.color; copy.fontSize = style.fontSize; return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self; copy.topLeft = CGPoint(x: topLeft.x + dx, y: topLeft.y + dy); return copy
+    }
+}
+
+extension CounterShape {
+    var tool: AnnotationTool { .counter }
+    var style: ToolStyle { .matching(value: diameter, in: ToolStyle.counterDiameters, color: color) }
+    func restyled(_ style: ToolStyle) -> any AnnotationShape {
+        var copy = self; copy.color = style.color; copy.diameter = style.counterDiameter; return copy
+    }
+    func moved(by dx: CGFloat, _ dy: CGFloat) -> any AnnotationShape {
+        var copy = self; copy.center = CGPoint(x: center.x + dx, y: center.y + dy); return copy
     }
 }

@@ -317,3 +317,153 @@ final class CounterAndHighlighterTests: XCTestCase {
         XCTAssertEqual(Double(pixel.0), 153, accuracy: 6)
     }
 }
+
+final class ShapeEditingTests: XCTestCase {
+    let red = Palette.colors[0]
+
+    func testMoveAndRestyleKeepId() throws {
+        let rect = RectangleShape(rect: CGRect(x: 0, y: 0, width: 10, height: 10), color: red, lineWidth: 4)
+        let moved = try XCTUnwrap(rect.moved(by: 5, -3) as? RectangleShape)
+        XCTAssertEqual(moved.id, rect.id)
+        XCTAssertEqual(moved.rect.origin, CGPoint(x: 5, y: -3))
+
+        let restyled = try XCTUnwrap(rect.restyled(ToolStyle(size: .large, colorIndex: 4)) as? RectangleShape)
+        XCTAssertEqual(restyled.id, rect.id)
+        XCTAssertEqual(restyled.lineWidth, 8)
+        XCTAssertEqual(restyled.color, Palette.colors[4])
+    }
+
+    func testStyleRoundTrip() {
+        let shapes: [any AnnotationShape] = [
+            RectangleShape(rect: .zero, color: Palette.colors[3], lineWidth: 2),
+            ArrowShape(start: .zero, end: CGPoint(x: 1, y: 1), color: Palette.colors[5], lineWidth: 8),
+            TextShape(topLeft: .zero, text: "a", color: Palette.colors[6], fontSize: 28, maxWidth: 100),
+            CounterShape(center: .zero, number: 1, color: Palette.colors[1], diameter: 20),
+            HighlighterShape(points: [.zero], color: Palette.colors[2], lineWidth: 18),
+        ]
+        let expected = [
+            ToolStyle(size: .small, colorIndex: 3), ToolStyle(size: .large, colorIndex: 5),
+            ToolStyle(size: .large, colorIndex: 6), ToolStyle(size: .small, colorIndex: 1),
+            ToolStyle(size: .medium, colorIndex: 2),
+        ]
+        XCTAssertEqual(shapes.map(\.style), expected)
+        XCTAssertEqual(MosaicShape(points: [], brushWidth: 40, blockSize: 16).style.size, .large)
+    }
+
+    func testRectHandlesResize() throws {
+        let shape = EllipseShape(rect: CGRect(x: 0, y: 0, width: 100, height: 50), color: red, lineWidth: 2)
+        XCTAssertEqual(shape.editHandles.count, 8)
+        // 第 4 个控制点是右下角（同 SelectionHandle.allCases 顺序）。
+        let resized = try XCTUnwrap(shape.dragging(handle: 4, to: CGPoint(x: 150, y: -20), constrain: false) as? EllipseShape)
+        XCTAssertEqual(resized.rect, CGRect(x: 0, y: -20, width: 150, height: 70))
+        // 越过对边翻转。
+        let flipped = try XCTUnwrap(shape.dragging(handle: 7, to: CGPoint(x: 130, y: 25), constrain: false) as? EllipseShape)
+        XCTAssertEqual(flipped.rect, CGRect(x: 100, y: 0, width: 30, height: 50))
+        // 角点 + ⇧：正圆。
+        let square = try XCTUnwrap(shape.dragging(handle: 2, to: CGPoint(x: 80, y: 120), constrain: true) as? EllipseShape)
+        XCTAssertEqual(square.rect.width, square.rect.height)
+    }
+
+    func testArrowEndpoints() throws {
+        let arrow = ArrowShape(start: .zero, end: CGPoint(x: 100, y: 0), color: red, lineWidth: 4)
+        XCTAssertEqual(arrow.editHandles, [.zero, CGPoint(x: 100, y: 0)])
+        let moved = try XCTUnwrap(arrow.dragging(handle: 0, to: CGPoint(x: 10, y: 50), constrain: false) as? ArrowShape)
+        XCTAssertEqual(moved.start, CGPoint(x: 10, y: 50))
+        XCTAssertEqual(moved.end, arrow.end)
+    }
+
+    func testCommitEditIsOneUndoStep() {
+        var document = AnnotationDocument()
+        let rect = RectangleShape(rect: CGRect(x: 0, y: 0, width: 10, height: 10), color: red, lineWidth: 2)
+        document.add(rect)
+        let snapshot = document.snapshot
+        for dx in 1...5 {
+            document.updateWithoutUndo(id: rect.id, with: rect.moved(by: CGFloat(dx), 0))
+        }
+        document.commitEdit(from: snapshot)
+        XCTAssertEqual((document.shapes[0] as? RectangleShape)?.rect.minX, 5)
+        document.undo()
+        XCTAssertEqual((document.shapes[0] as? RectangleShape)?.rect.minX, 0)
+        document.undo()
+        XCTAssertTrue(document.isEmpty)
+    }
+}
+
+@MainActor
+final class AnnotationControllerEditingTests: XCTestCase {
+    private func makeController() -> AnnotationController {
+        let controller = AnnotationController()
+        let geometry = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 400, height: 300), scale: 1)
+        let image = ImageExporterTests.solidImage(width: 400, height: 300, color: CGColor(gray: 1, alpha: 1))
+        let view = OverlayView(frame: geometry.localBounds)
+        controller.attach(to: view, display: DisplayCapture(displayID: 1, geometry: geometry, image: image),
+                          selection: CGRect(x: 0, y: 0, width: 400, height: 300))
+        return controller
+    }
+
+    private func drawRectangle(_ controller: AnnotationController) {
+        controller.toggle(.rectangle)
+        _ = controller.mouseDown(at: CGPoint(x: 100, y: 100), constrain: false)
+        _ = controller.mouseDragged(to: CGPoint(x: 200, y: 150), constrain: false)
+        _ = controller.mouseUp(at: CGPoint(x: 200, y: 150), constrain: false)
+        controller.toggle(.rectangle) // 取消工具
+    }
+
+    func testSelectMoveUndo() throws {
+        let controller = makeController()
+        drawRectangle(controller)
+        XCTAssertNil(controller.tool)
+
+        // 点在矩形边上：选中并拖动。
+        XCTAssertTrue(controller.beginEdit(at: CGPoint(x: 100, y: 120)))
+        XCTAssertNotNil(controller.selectedShape)
+        _ = controller.editDragged(to: CGPoint(x: 110, y: 130), constrain: false)
+        _ = controller.editDragged(to: CGPoint(x: 130, y: 140), constrain: false)
+        _ = controller.editEnded()
+        let moved = try XCTUnwrap(controller.selectedShape as? RectangleShape)
+        XCTAssertEqual(moved.rect.origin, CGPoint(x: 130, y: 120))
+
+        controller.undo()
+        XCTAssertEqual((controller.document.shapes[0] as? RectangleShape)?.rect.origin, CGPoint(x: 100, y: 100))
+    }
+
+    func testClickEmptyDeselectsAndDeleteRemoves() {
+        let controller = makeController()
+        drawRectangle(controller)
+        XCTAssertTrue(controller.beginEdit(at: CGPoint(x: 150, y: 100)))
+        _ = controller.editEnded()
+        XCTAssertFalse(controller.beginEdit(at: CGPoint(x: 300, y: 250)))
+        XCTAssertNil(controller.selectedShape)
+
+        XCTAssertTrue(controller.beginEdit(at: CGPoint(x: 150, y: 100)))
+        _ = controller.editEnded()
+        XCTAssertTrue(controller.deleteSelectedShape())
+        XCTAssertTrue(controller.document.isEmpty)
+        controller.undo()
+        XCTAssertEqual(controller.document.shapes.count, 1)
+    }
+
+    func testRestyleSelectedViaStylePanel() throws {
+        let controller = makeController()
+        drawRectangle(controller)
+        XCTAssertTrue(controller.beginEdit(at: CGPoint(x: 150, y: 100)))
+        _ = controller.editEnded()
+        controller.stylePanel(controller.stylePanel, didSelectColorAt: 4)
+        controller.stylePanel(controller.stylePanel, didSelect: .large)
+        let shape = try XCTUnwrap(controller.selectedShape as? RectangleShape)
+        XCTAssertEqual(shape.color, Palette.colors[4])
+        XCTAssertEqual(shape.lineWidth, 8)
+    }
+
+    func testCounterNumbersContinueAfterUndo() {
+        let controller = makeController()
+        controller.toggle(.counter)
+        for x in [50, 100, 150] {
+            _ = controller.mouseDown(at: CGPoint(x: x, y: 50), constrain: false)
+            _ = controller.mouseUp(at: CGPoint(x: x, y: 50), constrain: false)
+        }
+        XCTAssertEqual(controller.nextCounterNumber, 4)
+        controller.undo()
+        XCTAssertEqual(controller.nextCounterNumber, 3)
+    }
+}

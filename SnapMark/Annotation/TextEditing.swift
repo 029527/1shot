@@ -32,10 +32,17 @@ final class TextEditingController: NSObject, NSTextViewDelegate {
 
     /// 在 `host`（屏幕本地坐标）的 `point` 处开始输入。文字框左上角对齐点击位置，宽度不超过选区右边。
     func begin(at point: CGPoint, in host: NSView, selection: CGRect, style: ToolStyle) {
+        let lineHeight = ceil(TextShape.font(size: style.fontSize).boundingRectForFont.height)
+        let topLeft = CGPoint(x: point.x, y: min(point.y + lineHeight / 2, selection.maxY))
+        begin(topLeft: topLeft, text: "", in: host, selection: selection, style: style)
+    }
+
+    /// 在指定左上角开始输入；`text` 非空时为重新编辑已有文字。
+    func begin(topLeft: CGPoint, text: String, in host: NSView, selection: CGRect, style: ToolStyle) {
         finish()
         self.style = style
         let lineHeight = ceil(TextShape.font(size: style.fontSize).boundingRectForFont.height)
-        topLeft = CGPoint(x: point.x, y: min(point.y + lineHeight / 2, selection.maxY))
+        self.topLeft = topLeft
         maxWidth = max(selection.maxX - topLeft.x, style.fontSize)
 
         let textView = AnnotationTextView(frame: CGRect(x: topLeft.x, y: topLeft.y - lineHeight,
@@ -62,6 +69,11 @@ final class TextEditingController: NSObject, NSTextViewDelegate {
         textView.layer?.cornerRadius = 1
         textView.onEscape = { [weak self] in self?.finish() }
         apply(style, to: textView)
+        if !text.isEmpty {
+            textView.string = text
+            apply(style, to: textView)
+            textView.selectAll(nil)
+        }
 
         host.addSubview(textView)
         self.textView = textView

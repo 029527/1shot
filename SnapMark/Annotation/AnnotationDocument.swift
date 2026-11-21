@@ -29,6 +29,35 @@ struct AnnotationDocument {
         shapes.remove(at: index)
     }
 
+    func shape(id: UUID) -> (any AnnotationShape)? {
+        shapes.first { $0.id == id }
+    }
+
+    // MARK: 连续编辑（拖动、输入）合并成一步撤销
+
+    /// 当前图形列表的快照；编辑结束后交给 `commitEdit(from:)`。
+    var snapshot: [any AnnotationShape] { shapes }
+
+    /// 编辑过程中更新图形，不记撤销。
+    mutating func updateWithoutUndo(id: UUID, with shape: any AnnotationShape) {
+        guard let index = shapes.firstIndex(where: { $0.id == id }) else { return }
+        shapes[index] = shape
+    }
+
+    mutating func removeWithoutUndo(id: UUID) {
+        shapes.removeAll { $0.id == id }
+    }
+
+    mutating func appendWithoutUndo(_ shape: any AnnotationShape) {
+        shapes.append(shape)
+    }
+
+    /// 编辑结束：把编辑前的快照记为一步撤销。
+    mutating func commitEdit(from snapshot: [any AnnotationShape]) {
+        undoStack.append(snapshot)
+        redoStack.removeAll()
+    }
+
     /// 最上层命中的图形。
     func shape(at point: CGPoint, tolerance: CGFloat = 4) -> (any AnnotationShape)? {
         shapes.last { $0.hitTest(point, tolerance: tolerance) }

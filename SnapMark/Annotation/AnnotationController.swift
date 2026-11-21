@@ -20,6 +20,27 @@ final class AnnotationController {
     private var display: DisplayCapture?
     private var mosaicSource: MosaicSource?
 
+    // 选中已有图形再编辑
+    private(set) var selectedShapeID: UUID?
+    private var editDrag: EditDrag?
+    /// 重新编辑文字前的快照（结束输入时合并成一步撤销）。
+    private var textEditSnapshot: [any AnnotationShape]?
+
+    private struct EditDrag {
+        var start: CGPoint
+        var original: any AnnotationShape
+        /// nil 表示整体移动。
+        var handle: Int?
+        var snapshot: [any AnnotationShape]
+        var changed = false
+    }
+
+    var selectedShape: (any AnnotationShape)? {
+        selectedShapeID.flatMap { document.shape(id: $0) }
+    }
+
+    var isEditingShape: Bool { editDrag != nil }
+
     init() {
         stylePanel.delegate = self
         stylePanel.isHidden = true
@@ -31,7 +52,14 @@ final class AnnotationController {
 
     private func textFinished(_ shape: TextShape?) {
         guard !isResetting else { return }
-        if let shape { document.add(shape) }
+        if let snapshot = textEditSnapshot {
+            // 重新编辑：替换原文字（清空则删除），合并成一步撤销。
+            textEditSnapshot = nil
+            if let shape { document.appendWithoutUndo(shape) }
+            document.commitEdit(from: snapshot)
+        } else if let shape {
+            document.add(shape)
+        }
         syncCanvas()
         onChange?()
     }
@@ -52,6 +80,9 @@ final class AnnotationController {
         isResetting = false
         tool = nil
         builder = nil
+        selectedShapeID = nil
+        editDrag = nil
+        textEditSnapshot = nil
         document.removeAll()
         mosaicSource = nil
         display = nil
@@ -81,15 +112,24 @@ final class AnnotationController {
     }
 
     /// 属性条放在工具栏旁边；没有选中工具时隐藏。
+    /// 选中已有图形时显示该图形的样式，修改作用于该图形。
     func layoutStylePanel(in view: OverlayView, toolbarFrame: CGRect, placement: ToolbarLayout.Placement) {
-        guard let tool else {
+        let panelTool: AnnotationTool
+        let panelStyle: ToolStyle
+        if let tool {
+            panelTool = tool
+            panelStyle = styles.style(for: tool)
+        } else if let shape = selectedShape {
+            panelTool = shape.tool
+            panelStyle = shape.style
+        } else {
             stylePanel.isHidden = true
             return
         }
         if stylePanel.superview !== view.controlsHost {
             view.controlsHost.addSubview(stylePanel)
         }
-        stylePanel.configure(tool: tool, style: styles.style(for: tool))
+        stylePanel.configure(tool: panelTool, style: panelStyle)
         let frame = ToolbarLayout.stylePanelFrame(size: stylePanel.frame.size, toolbar: toolbarFrame,
                                                   placement: placement, bounds: view.bounds)
         stylePanel.setFrameOrigin(frame.origin)
@@ -105,6 +145,8 @@ final class AnnotationController {
     /// 选择工具；再次选择同一个工具则取消选中。
     func toggle(_ newTool: AnnotationTool) {
         finishTextEditing()
+        selectedShapeID = nil
+        syncCanvas()
         tool = tool == newTool ? nil : newTool
         if tool == .mosaic, let style = currentStyle {
             // 提前生成像素化图，避免第一笔卡顿。
@@ -168,6 +210,109 @@ final class AnnotationController {
         canvas.inProgress = builder.makeShape()
     }
 
+    // MARK: 选中已有图形再编辑（没有选中绘图工具时）
+
+    /// 按下：点在已选图形的控制点上 → 拖控制点；点在某个图形上 → 选中并开始移动；
+    /// 点在空白处 → 取消选中并返回 false（交给选区处理）。
+    func beginEdit(at point: CGPoint) -> Bool {
+        guard tool == nil else { return false }
+        if let shape = selectedShape, let index = handleIndex(of: shape, at: point) {
+            editDrag = EditDrag(start: point, original: shape, handle: index, snapshot: document.snapshot)
+            return true
+        }
+        if let hit = document.shape(at: point, tolerance: 4) {
+            selectedShapeID = hit.id
+            editDrag = EditDrag(start: point, original: hit, handle: nil, snapshot: document.snapshot)
+            syncCanvas()
+            onChange?()
+            return true
+        }
+        if selectedShapeID != nil {
+            deselectShape()
+        }
+        return false
+    }
+
+    func editDragged(to point: CGPoint, constrain: Bool) -> Bool {
+        guard var drag = editDrag else { return false }
+        let p = clamp(point)
+        let updated: any AnnotationShape
+        if let handle = drag.handle {
+            updated = drag.original.dragging(handle: handle, to: p, constrain: constrain)
+        } else {
+            updated = drag.original.moved(by: p.x - drag.start.x, p.y - drag.start.y)
+        }
+        document.updateWithoutUndo(id: drag.original.id, with: updated)
+        drag.changed = true
+        editDrag = drag
+        syncCanvas()
+        return true
+    }
+
+    func editEnded() -> Bool {
+        guard let drag = editDrag else { return false }
+        editDrag = nil
+        if drag.changed {
+            document.commitEdit(from: drag.snapshot)
+            onChange?()
+        }
+        return true
+    }
+
+    func deselectShape() {
+        guard selectedShapeID != nil else { return }
+        selectedShapeID = nil
+        syncCanvas()
+        onChange?()
+    }
+
+    /// Delete / Backspace：删除选中的图形。
+    func deleteSelectedShape() -> Bool {
+        guard let id = selectedShape?.id else { return false }
+        document.remove(id: id)
+        selectedShapeID = nil
+        syncCanvas()
+        onChange?()
+        return true
+    }
+
+    /// 方向键：移动选中的图形。
+    func nudgeSelectedShape(dx: CGFloat, dy: CGFloat) -> Bool {
+        guard let shape = selectedShape else { return false }
+        document.replace(id: shape.id, with: shape.moved(by: dx, dy))
+        syncCanvas()
+        onChange?()
+        return true
+    }
+
+    /// 双击文字：重新编辑。
+    func reeditText(at point: CGPoint) -> Bool {
+        guard tool == nil, let text = document.shape(at: point, tolerance: 4) as? TextShape,
+              let host = canvas.superview?.superview as? OverlayView else { return false }
+        editDrag = nil
+        textEditSnapshot = document.snapshot
+        document.removeWithoutUndo(id: text.id)
+        selectedShapeID = nil
+        syncCanvas()
+        textEditor.begin(topLeft: text.topLeft, text: text.text, in: host.controlsHost, selection: selection,
+                         style: text.style)
+        onChange?()
+        return true
+    }
+
+    /// 没有选中工具时的光标：控制点 → 十字，图形上 → 手形。
+    func editCursor(at point: CGPoint) -> NSCursor? {
+        guard tool == nil else { return nil }
+        if let drag = editDrag { return drag.handle == nil ? .closedHand : .crosshair }
+        if let shape = selectedShape, handleIndex(of: shape, at: point) != nil { return .crosshair }
+        if document.shape(at: point, tolerance: 4) != nil { return .openHand }
+        return nil
+    }
+
+    private func handleIndex(of shape: any AnnotationShape, at point: CGPoint) -> Int? {
+        shape.editHandles.indices.first { hypot(shape.editHandles[$0].x - point.x, shape.editHandles[$0].y - point.y) <= 7 }
+    }
+
     // MARK: 撤销 / 重做
 
     func undo() {
@@ -217,6 +362,12 @@ final class AnnotationController {
 
     private func syncCanvas() {
         canvas.shapes = document.shapes
+        if let id = selectedShapeID, document.shape(id: id) == nil {
+            selectedShapeID = nil
+        }
+        let selected = selectedShape
+        canvas.selectedOutline = selected?.bounds
+        canvas.editHandles = selected?.editHandles ?? []
     }
 
     private func clamp(_ point: CGPoint) -> CGPoint {
@@ -235,6 +386,12 @@ final class AnnotationController {
 
 extension AnnotationController: StylePanelDelegate {
     func stylePanel(_ panel: StylePanelView, didSelect size: SizeLevel) {
+        if tool == nil, let shape = selectedShape {
+            var style = shape.style
+            style.size = size
+            restyleSelected(style)
+            return
+        }
         guard let tool, var style = currentStyle else { return }
         style.size = size
         styles.setStyle(style, for: tool)
@@ -243,10 +400,23 @@ extension AnnotationController: StylePanelDelegate {
     }
 
     func stylePanel(_ panel: StylePanelView, didSelectColorAt index: Int) {
+        if tool == nil, let shape = selectedShape {
+            var style = shape.style
+            style.colorIndex = index
+            restyleSelected(style)
+            return
+        }
         guard let tool, var style = currentStyle else { return }
         style.colorIndex = index
         styles.setStyle(style, for: tool)
         if tool == .text { textEditor.update(style: style) }
+        onChange?()
+    }
+
+    private func restyleSelected(_ style: ToolStyle) {
+        guard let shape = selectedShape else { return }
+        document.replace(id: shape.id, with: shape.restyled(style))
+        syncCanvas()
         onChange?()
     }
 }

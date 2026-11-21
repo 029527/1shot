@@ -22,6 +22,21 @@ final class AnnotationCanvasView: NSView {
 
     var environment = AnnotationEnvironment()
 
+    /// 选中图形的虚线框与编辑控制点。
+    var selectedOutline: CGRect? {
+        didSet {
+            guard oldValue != selectedOutline else { return }
+            for rect in [oldValue, selectedOutline].compactMap({ $0 }) { setNeedsDisplay(rect.insetBy(dx: -6, dy: -6)) }
+        }
+    }
+    var editHandles: [CGPoint] = [] {
+        didSet {
+            guard oldValue != editHandles else { return }
+            let r = OverlayView.handleRadius + 3
+            for p in oldValue + editHandles { setNeedsDisplay(CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)) }
+        }
+    }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -51,5 +66,24 @@ final class AnnotationCanvasView: NSView {
         }
         inProgress?.draw(in: context, environment: environment)
         context.restoreGState()
+
+        // 选中图形的装饰不受选区裁剪。
+        if let outline = selectedOutline {
+            context.saveGState()
+            context.setStrokeColor(OverlayView.accentColor.cgColor)
+            context.setLineWidth(1)
+            context.setLineDash(phase: 0, lengths: [4, 3])
+            context.stroke(outline.insetBy(dx: -2, dy: -2))
+            context.restoreGState()
+        }
+        for handle in editHandles {
+            let r = OverlayView.handleRadius
+            let rect = CGRect(x: handle.x - r, y: handle.y - r, width: r * 2, height: r * 2)
+            context.setFillColor(NSColor.white.cgColor)
+            context.fillEllipse(in: rect)
+            context.setStrokeColor(OverlayView.accentColor.cgColor)
+            context.setLineWidth(1.5)
+            context.strokeEllipse(in: rect)
+        }
     }
 }

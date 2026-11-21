@@ -387,6 +387,9 @@ final class OverlayController {
 
     /// 选中绘图工具时，选区内显示十字（文字工具为 I 形）。
     private func annotationCursor() -> NSCursor? {
+        if annotations.tool == nil, let local = localPoint(mouse) {
+            return annotations.editCursor(at: local)
+        }
         guard let tool = annotations.tool, let model, let selection = model.selection,
               selection.contains(mouse), model.handle(at: mouse) == nil else { return nil }
         return tool == .text ? .iBeam : .crosshair
@@ -448,15 +451,29 @@ extension OverlayController: OverlayViewDelegate {
             return
         }
 
-        // 双击选区（未选中绘图工具时）：完成。
+        // 双击选区（未选中绘图工具时）：双击文字重新编辑，否则完成。
         if clickCount == 2, annotations.tool == nil, let selection = model?.selection, selection.contains(point),
            model?.state == .selected || model?.state == .annotating {
+            _ = annotations.editEnded()
+            if let local = localPoint(point), annotations.reeditText(at: local) {
+                render()
+                updateCursor()
+                return
+            }
             finish()
             return
         }
 
         if annotationShouldHandleMouseDown(at: point), let local = localPoint(point) {
             _ = annotations.mouseDown(at: local, constrain: modifiers.contains(.shift))
+            render()
+            updateCursor()
+            return
+        }
+
+        // 没有选中工具：点在已有图形上则选中 / 移动 / 拖控制点。
+        if annotations.tool == nil, model?.state == .selected || model?.state == .annotating,
+           let local = localPoint(point), annotations.beginEdit(at: local) {
             render()
             updateCursor()
             return
@@ -474,6 +491,10 @@ extension OverlayController: OverlayViewDelegate {
             _ = annotations.mouseDragged(to: local, constrain: modifiers.contains(.shift))
             return
         }
+        if annotations.isEditingShape, let local = localPoint(point) {
+            _ = annotations.editDragged(to: local, constrain: modifiers.contains(.shift))
+            return
+        }
         model?.mouseDragged(to: point)
         render()
         updateCursor()
@@ -484,6 +505,11 @@ extension OverlayController: OverlayViewDelegate {
         mouse = point
         if annotations.isDrawing, let local = localPoint(point) {
             _ = annotations.mouseUp(at: local, constrain: modifiers.contains(.shift))
+            updateCursor()
+            return
+        }
+        if annotations.isEditingShape {
+            _ = annotations.editEnded()
             updateCursor()
             return
         }
@@ -513,6 +539,20 @@ extension OverlayController: OverlayViewDelegate {
         shiftTogglePending = false
 
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
+
+        // 选中了图形：方向键移动图形，Delete 删除。
+        if annotations.selectedShape != nil {
+            switch event.keyCode {
+            case KeyCode.delete, KeyCode.forwardDelete:
+                return annotations.deleteSelectedShape()
+            case KeyCode.leftArrow: return annotations.nudgeSelectedShape(dx: -step, dy: 0)
+            case KeyCode.rightArrow: return annotations.nudgeSelectedShape(dx: step, dy: 0)
+            case KeyCode.upArrow: return annotations.nudgeSelectedShape(dx: 0, dy: step)
+            case KeyCode.downArrow: return annotations.nudgeSelectedShape(dx: 0, dy: -step)
+            default: break
+            }
+        }
+
         switch event.keyCode {
         case KeyCode.returnKey, KeyCode.keypadEnter:
             if model?.selection != nil, model?.state == .selected || model?.state == .annotating {
@@ -583,6 +623,10 @@ extension OverlayController: OverlayViewDelegate {
     func overlayViewDidPressEscape(_ view: OverlayView) {
         if annotations.isEditingText {
             annotations.finishTextEditing()
+            return
+        }
+        if annotations.selectedShape != nil {
+            annotations.deselectShape()
             return
         }
         Log.overlay.notice("Esc：退出截图")
