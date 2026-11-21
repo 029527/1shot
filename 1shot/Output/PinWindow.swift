@@ -148,8 +148,8 @@ final class PinWindow: NSPanel {
 
     /// 以 `anchor`（窗口内坐标）为中心缩放到 `newZoom`。
     func setZoom(_ newZoom: CGFloat, anchor: CGPoint? = nil) {
-        // 编辑时固定原始大小。
-        if isEditing, newZoom != 1 { return }
+        // 正在输入的文字先落定（输入框不跟着缩放位置）。
+        editor?.annotations.finishTextEditing()
         let clamped = min(max(newZoom, Self.minZoom), Self.maxZoom)
         guard clamped != zoom else { return }
         let old = frame
@@ -161,6 +161,15 @@ final class PinWindow: NSPanel {
         zoom = clamped
         setFrame(CGRect(origin: origin, size: size), display: true)
         pinView.showZoomBadge("\(Int((clamped * 100).rounded()))%")
+    }
+
+    /// 滚轮 / 触控板滚动 → 缩放倍数。按物理方向：滚轮或手指往上（远离自己）放大，
+    /// 不受「自然滚动」设置影响。用指数换算，放大一步再缩小一步回到原样。
+    nonisolated static func zoomFactor(deltaY: CGFloat, precise: Bool, invertedFromDevice: Bool) -> CGFloat {
+        let physical = invertedFromDevice ? -deltaY : deltaY
+        // 触控板（精确滚动）一次事件的位移小、频率高；鼠标滚轮一格约 1。
+        let step = precise ? physical * 0.008 : physical * 0.1
+        return exp(min(max(step, -0.5), 0.5))
     }
 
     // MARK: 动作
@@ -288,11 +297,13 @@ final class PinView: NSView, AnnotationHost {
         layoutHosts()
     }
 
-    /// 两个宿主铺满视图；标注宿主的坐标系固定为原始尺寸。
+    /// 两个宿主铺满视图，坐标系都固定为原始尺寸：缩放时标注、文字输入框跟着一起缩放，
+    /// 标注坐标始终与原图对应。
     private func layoutHosts() {
-        annotationHost.frame = bounds
-        annotationHost.bounds = CGRect(origin: .zero, size: originalSize)
-        controlsHost.frame = bounds
+        for host in [annotationHost, controlsHost] {
+            host.frame = bounds
+            host.bounds = CGRect(origin: .zero, size: originalSize)
+        }
     }
 
     override var isFlipped: Bool { false }
@@ -350,8 +361,13 @@ final class PinView: NSView, AnnotationHost {
         editor.cursor(at: location).set()
     }
 
+    /// 拖动窗口：按下时只记下位置，真正拖动时才移动。
+    /// （按下就进入系统的拖动循环会吞掉第二次点击，双击关闭时灵时不灵。）
+    private var dragStart: (mouse: CGPoint, origin: CGPoint)?
+
     override func mouseDown(with event: NSEvent) {
         window?.makeKey()
+        dragStart = nil
         if let editor = pinWindow?.editor,
            editor.mouseDown(at: annotationPoint(event), clickCount: event.clickCount, modifiers: event.modifierFlags) {
             annotating = true
@@ -359,19 +375,29 @@ final class PinView: NSView, AnnotationHost {
             return
         }
         annotating = false
-        if event.clickCount == 2, pinWindow?.isEditing != true {
+        // 双击：直接关闭贴图（编辑模式下双击文字是重新编辑，已在上面处理）。
+        if event.clickCount >= 2 {
             pinWindow?.close()
             return
         }
-        window?.performDrag(with: event)
+        if let window {
+            dragStart = (NSEvent.mouseLocation, window.frame.origin)
+        }
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard annotating else { return }
-        pinWindow?.editor?.mouseDragged(to: annotationPoint(event), modifiers: event.modifierFlags)
+        if annotating {
+            pinWindow?.editor?.mouseDragged(to: annotationPoint(event), modifiers: event.modifierFlags)
+            return
+        }
+        guard let dragStart, let window else { return }
+        let mouse = NSEvent.mouseLocation
+        window.setFrameOrigin(CGPoint(x: dragStart.origin.x + mouse.x - dragStart.mouse.x,
+                                      y: dragStart.origin.y + mouse.y - dragStart.mouse.y))
     }
 
     override func mouseUp(with event: NSEvent) {
+        dragStart = nil
         guard annotating else { return }
         annotating = false
         pinWindow?.editor?.mouseUp(at: annotationPoint(event), modifiers: event.modifierFlags)
@@ -383,15 +409,17 @@ final class PinView: NSView, AnnotationHost {
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
 
+    /// 鼠标滚轮 / 触控板双指上下滑动：以光标为中心缩放。
     override func scrollWheel(with event: NSEvent) {
-        guard let window = pinWindow, !window.isEditing else { return }
-        let delta = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY * 0.01 : event.scrollingDeltaY * 0.1
-        guard delta != 0 else { return }
-        window.setZoom(window.zoom * (1 + delta), anchor: convert(event.locationInWindow, from: nil))
+        guard let window = pinWindow, event.scrollingDeltaY != 0 else { return }
+        let factor = PinWindow.zoomFactor(deltaY: event.scrollingDeltaY, precise: event.hasPreciseScrollingDeltas,
+                                          invertedFromDevice: event.isDirectionInvertedFromDevice)
+        window.setZoom(window.zoom * factor, anchor: convert(event.locationInWindow, from: nil))
     }
 
+    /// 触控板双指捏合：以光标为中心缩放。
     override func magnify(with event: NSEvent) {
-        guard let window = pinWindow, !window.isEditing else { return }
+        guard let window = pinWindow, event.magnification != 0 else { return }
         window.setZoom(window.zoom * (1 + event.magnification), anchor: convert(event.locationInWindow, from: nil))
     }
 

@@ -25,7 +25,6 @@ enum OutputPipeline {
         // 圆角阴影需要透明背景，自动保存一律用 PNG。
         let format = decoration.isEffective ? .png : Preferences.imageFormat
         let directory = Preferences.saveDirectory
-        let showToast = Preferences.showToast
         let date = Date()
         let stopwatch = Stopwatch()
         lastCapture = LastCapture(image: image, anchor: anchor, scale: scale)
@@ -72,8 +71,8 @@ enum OutputPipeline {
                     Toast.shared.show(String(localized: "保存失败：\(saveError.localizedDescription)"), near: anchor)
                     return
                 }
-                guard showToast, let message = toastMessage(copied: copy, saved: save) else { return }
-                Toast.shared.show(message, near: anchor)
+                guard let message = toastMessage(copied: copy, saved: save) else { return }
+                Toast.shared.showCompletion(message, near: anchor)
             }
         }
     }
@@ -137,13 +136,13 @@ enum OutputPipeline {
         panel.begin { response in
             defer { completion() }
             guard response == .OK, let url = panel.url else {
-                if Preferences.showToast { Toast.shared.show(String(localized: "已复制"), near: anchor) }
+                Toast.shared.showCompletion(String(localized: "已复制"), near: anchor)
                 return
             }
             do {
                 let format = ImageFormat(fileExtension: url.pathExtension)
                 try FileSaver.write(image, format: format, to: url, encoded: format == .png ? png : nil)
-                if Preferences.showToast { Toast.shared.show(String(localized: "已复制并保存"), near: anchor) }
+                Toast.shared.showCompletion(String(localized: "已复制并保存"), near: anchor)
             } catch {
                 NSAlert(error: error).runModal()
             }

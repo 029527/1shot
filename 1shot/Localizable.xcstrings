@@ -67,6 +67,16 @@
         }
       }
     },
+    "不再显示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don’t show again"
+          }
+        }
+      }
+    },
     "不透明度": {
       "localizations": {
         "en": {
@@ -123,6 +133,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Set global shortcuts for each capture mode. They work in any app."
+          }
+        }
+      }
+    },
+    "以后不再显示复制、保存完成的提示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop showing notifications after copying or saving"
           }
         }
       }
@@ -593,6 +613,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Allowed"
+          }
+        }
+      }
+    },
+    "已关闭完成提示，可在设置 › 通用中重新打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications turned off. Turn them back on in Settings › General."
           }
         }
       }

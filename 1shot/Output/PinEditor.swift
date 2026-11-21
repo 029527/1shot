@@ -21,7 +21,7 @@ final class PinEditor: NSObject {
     private var panel: NSPanel?
     private let container = PassthroughView()
     private(set) var isToolbarVisible = false
-    private var moveObserver: NSObjectProtocol?
+    private var frameObservers: [NSObjectProtocol] = []
 
     init(pin: PinWindow) {
         self.pin = pin
@@ -42,8 +42,6 @@ final class PinEditor: NSObject {
 
     func showToolbar() {
         guard let pin, !isToolbarVisible else { return }
-        // 编辑时按原始大小，标注坐标与图片一一对应。
-        pin.setZoom(1)
         attach()
         isToolbarVisible = true
 
@@ -52,10 +50,11 @@ final class PinEditor: NSObject {
         if panel.parent == nil { pin.addChildWindow(panel, ordered: .above) }
         layout()
         panel.orderFront(nil)
-        moveObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didMoveNotification, object: pin, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.layout() }
+        // 贴图移动或缩放后，工具栏重新定位（放不下时换到上方 / 内部）。
+        frameObservers = [NSWindow.didMoveNotification, NSWindow.didResizeNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: pin, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.layout() }
+            }
         }
         updateToolbarState()
         pin.pinView.updateCursor()
@@ -68,8 +67,8 @@ final class PinEditor: NSObject {
         if let tool = annotations.tool { annotations.toggle(tool) }
         annotations.deselectShape()
         isToolbarVisible = false
-        if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
-        moveObserver = nil
+        frameObservers.forEach(NotificationCenter.default.removeObserver)
+        frameObservers = []
         if let panel {
             pin?.removeChildWindow(panel)
             panel.orderOut(nil)
@@ -123,9 +122,9 @@ final class PinEditor: NSObject {
             annotations.finishTextEditing()
             return true
         }
-        if clickCount == 2, annotations.tool == nil {
-            _ = annotations.reeditText(at: point)
-            return true
+        // 没选工具时双击：在文字上重新编辑；在别处交给贴图（关闭）。
+        if clickCount >= 2, annotations.tool == nil {
+            return annotations.reeditText(at: point)
         }
         if annotations.tool != nil {
             return annotations.mouseDown(at: point, constrain: modifiers.contains(.shift))
