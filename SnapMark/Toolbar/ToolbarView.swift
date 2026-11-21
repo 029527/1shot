@@ -12,7 +12,7 @@ enum ToolbarItem: CaseIterable, Hashable {
         case .ellipse: return "circle"
         case .arrow: return "arrow.up.right"
         case .pen: return "scribble"
-        case .text: return "textformat"
+        case .text: return "t.square"
         case .mosaic: return "checkerboard.rectangle"
         case .undo: return "arrow.uturn.backward"
         case .redo: return "arrow.uturn.forward"

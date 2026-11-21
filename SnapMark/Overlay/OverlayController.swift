@@ -17,8 +17,13 @@ final class OverlayController {
     /// 最近一次的光标位置（AppKit 全局坐标）。
     private(set) var mouse: CGPoint = .zero
 
-    // 工具栏
-    let toolbar = ToolbarView(groups: [[.save, .cancel, .done]])
+    // 工具栏与标注
+    let toolbar = ToolbarView(groups: [
+        [.rectangle, .ellipse, .arrow, .pen, .text, .mosaic],
+        [.undo, .redo],
+        [.save, .cancel, .done],
+    ])
+    let annotations = AnnotationController()
 
     // 放大镜状态
     private var colorFormat: ColorFormat = .hex
@@ -30,6 +35,7 @@ final class OverlayController {
     init() {
         toolbar.delegate = self
         toolbar.isHidden = true
+        annotations.onChange = { [weak self] in self?.annotationsChanged() }
     }
 
     // MARK: 窗口准备
@@ -264,9 +270,11 @@ final class OverlayController {
         guard let model, let active = activeSelection,
               let view = panels[active.display.displayID]?.overlayView else {
             toolbar.isHidden = true
-            controlsDidHide()
+            annotations.hideStylePanel()
             return
         }
+
+        annotations.attach(to: view, display: active.display, selection: active.local)
 
         let showToolbar = (model.state == .selected || model.state == .annotating)
             && !model.isAdjusting && model.state != .dragging
@@ -277,10 +285,10 @@ final class OverlayController {
             let layout = ToolbarLayout.frame(size: toolbar.frame.size, selection: active.local, bounds: view.bounds)
             toolbar.setFrameOrigin(layout.frame.origin)
             toolbar.isHidden = false
-            controlsDidLayout(in: view, toolbarFrame: layout.frame, placement: layout.placement, selection: active.local)
+            annotations.layoutStylePanel(in: view, toolbarFrame: layout.frame, placement: layout.placement)
         } else {
             toolbar.isHidden = true
-            controlsDidHide()
+            annotations.hideStylePanel()
         }
     }
 
@@ -358,16 +366,61 @@ final class OverlayController {
         render()
     }
 
-    // MARK: 标注扩展点（M3 实现）
+    // MARK: 标注
 
-    func sessionDidBegin() {}
-    func sessionWillEnd() {}
-    func commitPendingEdits() {}
-    func drawAnnotations(in context: CGContext) {}
-    func annotationCursor() -> NSCursor? { nil }
-    func controlsDidLayout(in view: OverlayView, toolbarFrame: CGRect, placement: ToolbarLayout.Placement,
-                           selection: CGRect) {}
-    func controlsDidHide() {}
+    private func sessionDidBegin() {
+        annotations.reset()
+        updateToolbarState()
+    }
+
+    private func sessionWillEnd() {
+        annotations.reset()
+    }
+
+    private func commitPendingEdits() {
+        annotations.finishTextEditing()
+    }
+
+    private func drawAnnotations(in context: CGContext) {
+        annotations.draw(in: context)
+    }
+
+    /// 选中绘图工具时，选区内显示十字（文字工具为 I 形）。
+    private func annotationCursor() -> NSCursor? {
+        guard let tool = annotations.tool, let model, let selection = model.selection,
+              selection.contains(mouse), model.handle(at: mouse) == nil else { return nil }
+        return tool == .text ? .iBeam : .crosshair
+    }
+
+    /// 有了至少一个标注就锁定选区；撤销到没有标注时解锁。
+    private func annotationsChanged() {
+        guard model != nil else { return }
+        if annotations.hasAnnotations {
+            if model?.isLocked == false { model?.lock() }
+        } else {
+            model?.unlock()
+        }
+        updateToolbarState()
+        render()
+        updateCursor()
+    }
+
+    private func updateToolbarState() {
+        toolbar.selectedTool = annotations.tool?.toolbarItem
+        toolbar.setEnabled(annotations.document.canUndo, for: .undo)
+        toolbar.setEnabled(annotations.document.canRedo, for: .redo)
+    }
+
+    private func localPoint(_ global: CGPoint) -> CGPoint? {
+        activeSelection.map { $0.display.geometry.localPoint(fromGlobal: global) }
+    }
+
+    /// 绘图工具是否接管这次按下（选区内、不在控制点上）。
+    private func annotationShouldHandleMouseDown(at point: CGPoint) -> Bool {
+        guard annotations.tool != nil, let model, let selection = model.selection,
+              model.state == .selected || model.state == .annotating else { return false }
+        return selection.contains(point) && model.handle(at: point) == nil
+    }
 }
 
 // MARK: - 事件
@@ -387,10 +440,25 @@ extension OverlayController: OverlayViewDelegate {
         shiftTogglePending = false
         mouse = point
 
+        // 正在输入文字：点击别处结束输入。
+        if annotations.isEditingText {
+            _ = annotations.mouseDown(at: localPoint(point) ?? point, constrain: false)
+            render()
+            updateCursor()
+            return
+        }
+
         // 双击选区（未选中绘图工具时）：完成。
-        if clickCount == 2, let selection = model?.selection, selection.contains(point),
+        if clickCount == 2, annotations.tool == nil, let selection = model?.selection, selection.contains(point),
            model?.state == .selected || model?.state == .annotating {
             finish()
+            return
+        }
+
+        if annotationShouldHandleMouseDown(at: point), let local = localPoint(point) {
+            _ = annotations.mouseDown(at: local, constrain: modifiers.contains(.shift))
+            render()
+            updateCursor()
             return
         }
 
@@ -402,6 +470,10 @@ extension OverlayController: OverlayViewDelegate {
     func overlayView(_ view: OverlayView, mouseDraggedTo point: CGPoint, modifiers: NSEvent.ModifierFlags) {
         guard model != nil else { return }
         mouse = point
+        if annotations.isDrawing, let local = localPoint(point) {
+            _ = annotations.mouseDragged(to: local, constrain: modifiers.contains(.shift))
+            return
+        }
         model?.mouseDragged(to: point)
         render()
         updateCursor()
@@ -410,6 +482,11 @@ extension OverlayController: OverlayViewDelegate {
     func overlayView(_ view: OverlayView, mouseUpAt point: CGPoint, modifiers: NSEvent.ModifierFlags) {
         guard model != nil else { return }
         mouse = point
+        if annotations.isDrawing, let local = localPoint(point) {
+            _ = annotations.mouseUp(at: local, constrain: modifiers.contains(.shift))
+            updateCursor()
+            return
+        }
         model?.mouseUp(at: point)
         render()
         updateCursor()
@@ -450,6 +527,13 @@ extension OverlayController: OverlayViewDelegate {
             copyColor()
             return true
         default:
+            // 工具快捷键：R / O / A / P / T / M
+            if event.modifierFlags.isDisjoint(with: [.command, .control, .option]),
+               model?.state == .selected || model?.state == .annotating,
+               let characters = event.charactersIgnoringModifiers, let tool = AnnotationTool(shortcut: characters) {
+                annotations.toggle(tool)
+                return true
+            }
             return false
         }
         render()
@@ -459,6 +543,7 @@ extension OverlayController: OverlayViewDelegate {
     func overlayView(_ view: OverlayView, flagsChanged event: NSEvent) {
         // 单独按一下 ⇧（中间没有按别的键）切换颜色格式；⇧ + 方向键不切换。
         let shiftDown = event.modifierFlags.contains(.shift)
+        annotations.constrainChanged(shiftDown)
         let isShiftKey = event.keyCode == 56 || event.keyCode == 60
         guard isShiftKey else {
             shiftTogglePending = false
@@ -478,16 +563,28 @@ extension OverlayController: OverlayViewDelegate {
         let hasSelection = model.selection != nil && (model.state == .selected || model.state == .annotating)
         switch command {
         case .finish:
+            // 正在输入文字时 ⌘C 按复制文字处理。
+            if annotations.isEditingText { return false }
             if hasSelection { finish() }
         case .saveAs:
             if hasSelection { saveAs() }
         case .undo, .redo:
-            break
+            if annotations.isEditingText {
+                annotations.undoInTextField(redo: command == .redo)
+            } else if command == .undo {
+                annotations.undo()
+            } else {
+                annotations.redo()
+            }
         }
         return true
     }
 
     func overlayViewDidPressEscape(_ view: OverlayView) {
+        if annotations.isEditingText {
+            annotations.finishTextEditing()
+            return
+        }
         Log.overlay.notice("Esc：退出截图")
         dismiss()
     }
@@ -501,7 +598,10 @@ extension OverlayController: ToolbarViewDelegate {
         case .save: saveAs()
         case .cancel: dismiss()
         case .done: finish()
-        default: break
+        case .undo: annotations.undo()
+        case .redo: annotations.redo()
+        default:
+            if let tool = AnnotationTool(item: item) { annotations.toggle(tool) }
         }
     }
 }

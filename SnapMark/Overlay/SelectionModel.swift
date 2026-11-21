@@ -267,6 +267,13 @@ struct SelectionModel {
         interaction = .none
     }
 
+    /// 撤销到没有标注时解锁。
+    mutating func unlock() {
+        guard isLocked else { return }
+        isLocked = false
+        if state == .annotating { state = .selected }
+    }
+
     mutating func finish() {
         state = .finished
         interaction = .none
