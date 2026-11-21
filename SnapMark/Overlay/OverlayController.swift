@@ -260,14 +260,14 @@ final class OverlayController {
                 let text = TextRecognizer.layout(lines)
                 Log.app.notice("文字识别：\(lines.count, privacy: .public) 行，\(stopwatch.elapsedMs, format: .fixed(precision: 0), privacy: .public) ms")
                 guard !text.isEmpty else {
-                    Toast.shared.show("没有识别到文字", near: anchor)
+                    Toast.shared.show(String(localized: "没有识别到文字"), near: anchor)
                     return
                 }
                 OCRResultWindowController.copy(text)
                 OCRResultWindowController.shared.show(text: text, near: anchor)
             } catch {
                 Log.app.error("文字识别失败：\(error.localizedDescription, privacy: .public)")
-                Toast.shared.show("文字识别失败", near: anchor)
+                Toast.shared.show(String(localized: "文字识别失败"), near: anchor)
             }
         }
     }
@@ -420,7 +420,7 @@ final class OverlayController {
         pasteboard.setString(value, forType: .string)
         Log.overlay.notice("已复制颜色 \(value, privacy: .public)")
 
-        magnifierFeedback = "已复制 \(value)"
+        magnifierFeedback = String(localized: "已复制 \(value)")
         feedbackResetWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.magnifierFeedback = nil

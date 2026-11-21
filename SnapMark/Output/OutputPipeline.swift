@@ -69,7 +69,7 @@ enum OutputPipeline {
                     addToHistory(png: historyPNG, image: image, scale: scale, date: date)
                 }
                 if let saveError = finalError {
-                    Toast.shared.show("保存失败：\(saveError.localizedDescription)", near: anchor)
+                    Toast.shared.show(String(localized: "保存失败：\(saveError.localizedDescription)"), near: anchor)
                     return
                 }
                 guard showToast, let message = toastMessage(copied: copy, saved: save) else { return }
@@ -80,9 +80,9 @@ enum OutputPipeline {
 
     nonisolated static func toastMessage(copied: Bool, saved: Bool) -> String? {
         switch (copied, saved) {
-        case (true, true): return "已复制并保存"
-        case (true, false): return "已复制"
-        case (false, true): return "已保存"
+        case (true, true): return String(localized: "已复制并保存")
+        case (true, false): return String(localized: "已复制")
+        case (false, true): return String(localized: "已保存")
         case (false, false): return nil
         }
     }
@@ -125,7 +125,7 @@ enum OutputPipeline {
 
         let format = decoration.isEffective ? .png : Preferences.imageFormat
         let panel = NSSavePanel()
-        panel.title = "保存截图"
+        panel.title = String(localized: "保存截图")
         panel.nameFieldStringValue = FileNamer.fileName(for: Date(), fileExtension: format.fileExtension)
         panel.directoryURL = try? Preferences.ensureSaveDirectory()
         panel.allowedContentTypes = [ImageFormat.png.utType, ImageFormat.jpg.utType]
@@ -137,13 +137,13 @@ enum OutputPipeline {
         panel.begin { response in
             defer { completion() }
             guard response == .OK, let url = panel.url else {
-                if Preferences.showToast { Toast.shared.show("已复制", near: anchor) }
+                if Preferences.showToast { Toast.shared.show(String(localized: "已复制"), near: anchor) }
                 return
             }
             do {
                 let format = ImageFormat(fileExtension: url.pathExtension)
                 try FileSaver.write(image, format: format, to: url, encoded: format == .png ? png : nil)
-                if Preferences.showToast { Toast.shared.show("已复制并保存", near: anchor) }
+                if Preferences.showToast { Toast.shared.show(String(localized: "已复制并保存"), near: anchor) }
             } catch {
                 NSAlert(error: error).runModal()
             }

@@ -39,6 +39,45 @@ struct ImageDecoration: Equatable {
     var isEffective: Bool { isEnabled && (cornerRatio > 0 || shadowLength > 0) }
 }
 
+/// 界面语言：跟随系统，或固定为简体中文 / 英文（写入本 App 的 AppleLanguages，重启后生效）。
+enum AppLanguage: String, CaseIterable, Identifiable {
+    case system
+    case simplifiedChinese = "zh-Hans"
+    case english = "en"
+
+    var id: String { rawValue }
+
+    /// 选项里显示的名字：语言名用该语言自己的写法。
+    var displayName: String {
+        switch self {
+        case .system: return String(localized: "跟随系统")
+        case .simplifiedChinese: return "简体中文"
+        case .english: return "English"
+        }
+    }
+
+    static let appleLanguagesKey = "AppleLanguages"
+
+    /// 当前设置（读本 App 自己的 UserDefaults 域，不含全局）。
+    static func current(in defaults: UserDefaults = .standard) -> AppLanguage {
+        guard let domain = Bundle.main.bundleIdentifier,
+              let languages = defaults.persistentDomain(forName: domain)?[appleLanguagesKey] as? [String],
+              let first = languages.first
+        else { return .system }
+        if first.hasPrefix("zh") { return .simplifiedChinese }
+        if first.hasPrefix("en") { return .english }
+        return .system
+    }
+
+    func apply(to defaults: UserDefaults = .standard) {
+        if self == .system {
+            defaults.removeObject(forKey: Self.appleLanguagesKey)
+        } else {
+            defaults.set([rawValue], forKey: Self.appleLanguagesKey)
+        }
+    }
+}
+
 /// 保存格式。
 enum ImageFormat: String, CaseIterable, Identifiable {
     case png
@@ -138,7 +177,7 @@ enum Preferences {
     /// 默认保存目录：~/Pictures/截图
     static var defaultSaveDirectory: URL {
         FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("截图", isDirectory: true)
+            .appendingPathComponent(String(localized: "save-directory-name", defaultValue: "截图"), isDirectory: true)
     }
 
     static var saveDirectory: URL {

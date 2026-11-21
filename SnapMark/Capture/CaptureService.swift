@@ -31,9 +31,9 @@ enum CaptureError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noDisplays:
-            return "没有找到可以截图的显示器。"
+            return String(localized: "没有找到可以截图的显示器。")
         case .screenshotFailed(let underlying):
-            return "截图失败：\(underlying.localizedDescription)"
+            return String(localized: "截图失败：\(underlying.localizedDescription)")
         }
     }
 }

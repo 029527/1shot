@@ -60,7 +60,7 @@ enum Palette {
         PaletteColor(0x000000), // 黑
         PaletteColor(0xFFFFFF), // 白
     ]
-    static let names = ["红色", "橙色", "黄色", "绿色", "蓝色", "紫色", "黑色", "白色"]
+    static let names = [String(localized: "红色"), String(localized: "橙色"), String(localized: "黄色"), String(localized: "绿色"), String(localized: "蓝色"), String(localized: "紫色"), String(localized: "黑色"), String(localized: "白色")]
     static let defaultIndex = 0
 }
 

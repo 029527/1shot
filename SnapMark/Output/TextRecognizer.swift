@@ -91,13 +91,13 @@ private struct OCRResultView: View {
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor)))
             HStack {
-                Text(copied ? "已复制" : "已自动复制全部文字，可编辑后再复制")
+                Text(copied ? String(localized: "已复制") : String(localized: "已自动复制全部文字，可编辑后再复制"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("关闭", action: onClose)
+                Button(String(localized: "关闭"), action: onClose)
                     .keyboardShortcut(.cancelAction)
-                Button("复制") {
+                Button(String(localized: "复制")) {
                     onCopy(text)
                     copied = true
                 }
@@ -124,7 +124,7 @@ final class OCRResultWindowController {
             backing: .buffered,
             defer: false
         )
-        panel.title = "识别结果"
+        panel.title = String(localized: "识别结果")
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false

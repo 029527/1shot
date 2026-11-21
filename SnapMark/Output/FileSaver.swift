@@ -51,7 +51,7 @@ enum FileSaverError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .encodingFailed: return "图片编码失败。"
+        case .encodingFailed: return String(localized: "图片编码失败。")
         }
     }
 }

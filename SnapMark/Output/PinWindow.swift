@@ -173,7 +173,7 @@ final class PinWindow: NSPanel {
         } else {
             PasteboardWriter.write(outputImage)
         }
-        pinView.showZoomBadge("已复制")
+        pinView.showZoomBadge(String(localized: "已复制"))
     }
 
     @objc func saveImage(_ sender: Any?) {
@@ -222,12 +222,12 @@ final class PinWindow: NSPanel {
             item.target = self
             menu.addItem(item)
         }
-        add(text == nil || editor?.hasAnnotations == true ? "复制" : "复制文字", #selector(copyImage(_:)), "c")
-        add(isEditing ? "收起工具栏" : "编辑标注", #selector(toggleEditorAction(_:)), " ")
-        add("另存为…", #selector(saveImage(_:)), "s")
+        add(text == nil || editor?.hasAnnotations == true ? String(localized: "复制") : String(localized: "复制文字"), #selector(copyImage(_:)), "c")
+        add(isEditing ? String(localized: "收起工具栏") : String(localized: "编辑标注"), #selector(toggleEditorAction(_:)), " ")
+        add(String(localized: "另存为…"), #selector(saveImage(_:)), "s")
         menu.addItem(.separator())
-        add("原始大小", #selector(resetZoom(_:)), "0")
-        let opacity = NSMenuItem(title: "不透明度", action: nil, keyEquivalent: "")
+        add(String(localized: "原始大小"), #selector(resetZoom(_:)), "0")
+        let opacity = NSMenuItem(title: String(localized: "不透明度"), action: nil, keyEquivalent: "")
         let opacityMenu = NSMenu()
         for percent in [100, 80, 60, 40] {
             let item = NSMenuItem(title: "\(percent)%", action: #selector(setOpacity(_:)), keyEquivalent: "")
@@ -239,9 +239,9 @@ final class PinWindow: NSPanel {
         opacity.submenu = opacityMenu
         menu.addItem(opacity)
         menu.addItem(.separator())
-        add("关闭", #selector(closePin(_:)), "w")
+        add(String(localized: "关闭"), #selector(closePin(_:)), "w")
         if PinManager.shared.count > 1 {
-            add("关闭全部贴图", #selector(closeAllPins(_:)))
+            add(String(localized: "关闭全部贴图"), #selector(closeAllPins(_:)))
         }
         return menu
     }

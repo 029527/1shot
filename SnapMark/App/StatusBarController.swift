@@ -26,7 +26,7 @@ final class StatusBarController: NSObject {
             image?.isTemplate = true
             image?.accessibilityDescription = "SnapMark"
             button.image = image
-            button.toolTip = "SnapMark 截图"
+            button.toolTip = String(localized: "SnapMark 截图")
         }
         statusItem.menu = makeMenu()
     }
@@ -34,40 +34,40 @@ final class StatusBarController: NSObject {
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
 
-        let capture = NSMenuItem(title: "截图", action: #selector(captureClicked), keyEquivalent: "")
+        let capture = NSMenuItem(title: String(localized: "截图"), action: #selector(captureClicked), keyEquivalent: "")
         capture.target = self
         capture.setShortcut(for: .captureScreen)
         menu.addItem(capture)
 
-        let quick = NSMenuItem(title: "截图并复制", action: #selector(captureAndCopyClicked), keyEquivalent: "")
+        let quick = NSMenuItem(title: String(localized: "截图并复制"), action: #selector(captureAndCopyClicked), keyEquivalent: "")
         quick.target = self
         quick.setShortcut(for: .captureAndCopy)
         menu.addItem(quick)
 
-        let pin = NSMenuItem(title: "贴图（剪贴板）", action: #selector(pinClicked), keyEquivalent: "")
+        let pin = NSMenuItem(title: String(localized: "贴图（剪贴板）"), action: #selector(pinClicked), keyEquivalent: "")
         pin.target = self
         pin.setShortcut(for: .pinClipboard)
         menu.addItem(pin)
 
         menu.addItem(.separator())
 
-        let history = NSMenuItem(title: "截图历史…", action: #selector(historyClicked), keyEquivalent: "")
+        let history = NSMenuItem(title: String(localized: "截图历史…"), action: #selector(historyClicked), keyEquivalent: "")
         history.target = self
         menu.addItem(history)
 
-        let open = NSMenuItem(title: "打开保存目录", action: #selector(openSaveDirectoryClicked), keyEquivalent: "")
+        let open = NSMenuItem(title: String(localized: "打开保存目录"), action: #selector(openSaveDirectoryClicked), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
 
         menu.addItem(.separator())
 
-        let settings = NSMenuItem(title: "设置…", action: #selector(settingsClicked), keyEquivalent: ",")
+        let settings = NSMenuItem(title: String(localized: "设置…"), action: #selector(settingsClicked), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
 
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "退出 SnapMark", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: String(localized: "退出 SnapMark"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
 
         return menu
@@ -83,18 +83,22 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func pinClicked() {
-        actions.pinClipboard()
+        // 等菜单完全收起后再执行：菜单还在收起时激活 App 会失败，窗口会被压在其他 App 后面。
+        DispatchQueue.main.async { [actions] in actions.pinClipboard() }
     }
 
     @objc private func historyClicked() {
-        actions.openHistory()
+        // 等菜单完全收起后再执行：菜单还在收起时激活 App 会失败，窗口会被压在其他 App 后面。
+        DispatchQueue.main.async { [actions] in actions.openHistory() }
     }
 
     @objc private func openSaveDirectoryClicked() {
-        actions.openSaveDirectory()
+        // 等菜单完全收起后再执行：菜单还在收起时激活 App 会失败，窗口会被压在其他 App 后面。
+        DispatchQueue.main.async { [actions] in actions.openSaveDirectory() }
     }
 
     @objc private func settingsClicked() {
-        actions.openSettings()
+        // 等菜单完全收起后再执行：菜单还在收起时激活 App 会失败，窗口会被压在其他 App 后面。
+        DispatchQueue.main.async { [actions] in actions.openSettings() }
     }
 }

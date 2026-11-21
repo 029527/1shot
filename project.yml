@@ -16,6 +16,8 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
 
 packages:
   KeyboardShortcuts:
@@ -39,6 +41,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.productivity
+        CFBundleLocalizations: [zh-Hans, en]
+        CFBundleAllowMixedLocalizations: true
         NSHumanReadableCopyright: ""
     settings:
       base:
@@ -69,6 +73,9 @@ schemes:
         SnapMark: all
         SnapMarkTests: [test]
     test:
+      # 测试里断言了中文文案（文件名、提示语），固定用简体中文运行，不受系统语言影响。
+      language: zh-Hans
+      region: CN
       targets:
         - SnapMarkTests
     run:

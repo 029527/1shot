@@ -12,61 +12,33 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .general: return "通用"
-        case .shortcuts: return "快捷键"
-        case .output: return "完成截图后"
-        case .effects: return "圆角与阴影"
-        case .about: return "关于"
+        case .general: return String(localized: "通用")
+        case .shortcuts: return String(localized: "快捷键")
+        case .output: return String(localized: "完成截图后")
+        case .effects: return String(localized: "圆角与阴影")
+        case .about: return String(localized: "关于")
         }
     }
 
     var subtitle: String {
         switch self {
-        case .general: return "开机启动、完成提示与截图历史。"
-        case .shortcuts: return "为不同的截图方式设置全局快捷键，在任何 App 里都能使用。"
-        case .output: return "截图完成时自动复制、自动保存，以及保存的位置和格式。"
-        case .effects: return "给复制和保存的截图加上圆角与投影，分享出去更好看。"
-        case .about: return "版本信息与权限状态。"
+        case .general: return String(localized: "开机启动、完成提示与截图历史。")
+        case .shortcuts: return String(localized: "为不同的截图方式设置全局快捷键，在任何 App 里都能使用。")
+        case .output: return String(localized: "截图完成时自动复制、自动保存，以及保存的位置和格式。")
+        case .effects: return String(localized: "给复制和保存的截图加上圆角与投影，分享出去更好看。")
+        case .about: return String(localized: "版本信息与权限状态。")
         }
     }
 
+    /// 侧边栏用的线条图标（单色，跟随系统强调色）。
     var symbol: String {
         switch self {
-        case .general: return "gearshape.fill"
+        case .general: return "gearshape"
         case .shortcuts: return "command"
-        case .output: return "square.and.arrow.down.fill"
-        case .effects: return "square.on.square.squareshape.controlhandles"
-        case .about: return "info.circle.fill"
+        case .output: return "square.and.arrow.down"
+        case .effects: return "square.on.square"
+        case .about: return "info.circle"
         }
-    }
-
-    var tint: Color {
-        switch self {
-        case .general: return Color(red: 0.55, green: 0.56, blue: 0.6)
-        case .shortcuts: return Color(red: 0.2, green: 0.47, blue: 0.96)
-        case .output: return Color(red: 0.2, green: 0.72, blue: 0.4)
-        case .effects: return Color(red: 0.6, green: 0.36, blue: 0.95)
-        case .about: return Color(red: 0.4, green: 0.42, blue: 0.47)
-        }
-    }
-}
-
-/// 系统设置风格的圆角方块图标。
-struct SettingsIcon: View {
-    var symbol: String
-    var tint: Color
-    var size: CGFloat = 20
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-            .fill(tint.gradient)
-            .overlay {
-                Image(systemName: symbol)
-                    .font(.system(size: size * 0.55, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: size, height: size)
-            .shadow(color: .black.opacity(0.12), radius: 0.5, y: 0.5)
     }
 }
 
@@ -85,16 +57,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsPane.allCases, selection: $pane) { pane in
-                Label {
-                    Text(pane.title)
-                } icon: {
-                    SettingsIcon(symbol: pane.symbol, tint: pane.tint)
-                }
-                .tag(pane)
-                .padding(.vertical, 2)
+                Label(pane.title, systemImage: pane.symbol)
+                    .tag(pane)
+                    .padding(.vertical, 1)
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(190)
+            .navigationSplitViewColumnWidth(210)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             Group {
@@ -114,39 +82,35 @@ struct SettingsView: View {
     }
 }
 
-/// 页面顶部：大图标 + 标题 + 说明，居中。
+/// 页面顶部：标题 + 一句说明，左对齐，不加卡片背景。
 private struct PaneHeader: View {
     var pane: SettingsPane
 
     var body: some View {
         Section {
-            VStack(spacing: 8) {
-                SettingsIcon(symbol: pane.symbol, tint: pane.tint, size: 52)
+            VStack(alignment: .leading, spacing: 4) {
                 Text(pane.title)
                     .font(.title2.weight(.semibold))
                 Text(pane.subtitle)
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
     }
 }
 
-/// 带小图标、标题和说明的一行。
-private struct IconRow<Trailing: View>: View {
-    var symbol: String
-    var tint: Color
+/// 标题 + 说明 + 右侧控件的一行。
+private struct SettingRow<Trailing: View>: View {
     var title: String
     var detail: String?
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            SettingsIcon(symbol: symbol, tint: tint, size: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                 if let detail {
@@ -171,6 +135,9 @@ private struct GeneralPane: View {
     @AppStorage(Preferences.Key.showToast) private var showToast = true
     @AppStorage(Preferences.Key.keepHistory) private var keepHistory = true
 
+    @State private var language = AppLanguage.current()
+    /// 启动时的语言设置，与之不同时提示重启。
+    @State private var launchLanguage = AppLanguage.current()
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchNeedsApproval = LaunchAtLogin.requiresApproval
     @State private var launchError: String?
@@ -180,18 +147,38 @@ private struct GeneralPane: View {
             PaneHeader(pane: .general)
 
             Section {
-                IconRow(symbol: "power", tint: .orange, title: "开机时自动启动") {
+                Picker(String(localized: "语言"), selection: Binding(get: { language }, set: { newValue in
+                    language = newValue
+                    newValue.apply()
+                })) {
+                    ForEach(AppLanguage.allCases) { option in
+                        Text(verbatim: option.displayName).tag(option)
+                    }
+                }
+                if language != launchLanguage {
+                    HStack {
+                        Text(String(localized: "重启 SnapMark 后生效。"))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button(String(localized: "立即重启")) { AppRelauncher.relaunch() }
+                    }
+                }
+            }
+
+            Section {
+                SettingRow(title: String(localized: "开机时自动启动")) {
                     Toggle("", isOn: Binding(get: { launchAtLogin }, set: { setLaunchAtLogin($0) }))
                         .labelsHidden()
                         .toggleStyle(.switch)
                 }
                 if launchNeedsApproval {
                     HStack {
-                        Label("需要在「系统设置 › 通用 › 登录项」中允许 SnapMark。", systemImage: "exclamationmark.triangle.fill")
+                        Label(String(localized: "需要在「系统设置 › 通用 › 登录项」中允许 SnapMark。"), systemImage: "exclamationmark.triangle.fill")
                             .font(.callout)
                             .foregroundStyle(.orange)
                         Spacer()
-                        Button("打开登录项设置") { LaunchAtLogin.openSystemSettings() }
+                        Button(String(localized: "打开登录项设置")) { LaunchAtLogin.openSystemSettings() }
                     }
                 }
                 if let launchError {
@@ -199,20 +186,20 @@ private struct GeneralPane: View {
                         .font(.callout)
                         .foregroundStyle(.red)
                 }
-                IconRow(symbol: "bell.badge.fill", tint: .red, title: "显示完成提示",
-                        detail: "复制、保存后在选区附近短暂提示。") {
+                SettingRow(title: String(localized: "显示完成提示"),
+                        detail: String(localized: "复制、保存后在选区附近短暂提示。")) {
                     Toggle("", isOn: $showToast).labelsHidden().toggleStyle(.switch)
                 }
             }
 
             Section {
-                IconRow(symbol: "clock.arrow.circlepath", tint: .teal, title: "保留截图历史",
-                        detail: "保存最近 \(HistoryStore.defaultLimit) 张截图，可以重新复制、贴图。") {
+                SettingRow(title: String(localized: "保留截图历史"),
+                        detail: String(localized: "保存最近 \(HistoryStore.defaultLimit) 张截图，可以重新复制、贴图。")) {
                     Toggle("", isOn: $keepHistory).labelsHidden().toggleStyle(.switch)
                 }
                 HStack {
                     Spacer()
-                    Button("打开截图历史…", action: openHistory)
+                    Button(String(localized: "打开截图历史…"), action: openHistory)
                 }
             }
         }
@@ -226,7 +213,7 @@ private struct GeneralPane: View {
             try LaunchAtLogin.setEnabled(enabled)
             launchError = nil
         } catch {
-            launchError = "设置开机启动失败：\(error.localizedDescription)"
+            launchError = String(localized: "设置开机启动失败：\(error.localizedDescription)")
         }
         refreshLaunchState()
     }
@@ -245,25 +232,25 @@ private struct ShortcutsPane: View {
             PaneHeader(pane: .shortcuts)
 
             Section {
-                IconRow(symbol: "crop", tint: .blue, title: "截图",
-                        detail: "选区后显示工具栏，可以标注、贴图、识别文字。") {
+                SettingRow(title: String(localized: "截图"),
+                        detail: String(localized: "选区后显示工具栏，可以标注、贴图、识别文字。")) {
                     KeyboardShortcuts.Recorder(for: .captureScreen)
                 }
-                IconRow(symbol: "doc.on.clipboard.fill", tint: .green, title: "截图并复制",
-                        detail: "松开鼠标（或单击窗口）立即完成并复制，不显示工具栏。") {
+                SettingRow(title: String(localized: "截图并复制"),
+                        detail: String(localized: "松开鼠标（或单击窗口）立即完成并复制，不显示工具栏。")) {
                     KeyboardShortcuts.Recorder(for: .captureAndCopy)
                 }
-                IconRow(symbol: "pin.fill", tint: .pink, title: "贴图",
-                        detail: "把剪贴板里的图片、文字或链接贴到桌面；刚截的图贴回原位置。") {
+                SettingRow(title: String(localized: "贴图"),
+                        detail: String(localized: "把剪贴板里的图片、文字或链接贴到桌面；刚截的图贴回原位置。")) {
                     KeyboardShortcuts.Recorder(for: .pinClipboard)
                 }
             } footer: {
-                Text("点击右侧录制新的快捷键，点 ⓧ 清除。与其他 App 冲突时，请在其中一边改掉。")
+                Text(String(localized: "点击右侧录制新的快捷键，点 ⓧ 清除。与其他 App 冲突时，请在其中一边改掉。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("截图时") {
+            Section(String(localized: "截图时")) {
                 ForEach(Self.tips, id: \.0) { keys, text in
                     LabeledContent(text) {
                         Text(keys)
@@ -279,13 +266,13 @@ private struct ShortcutsPane: View {
     }
 
     private static let tips: [(String, String)] = [
-        ("Enter / ⌘C", "完成并复制"),
-        ("⌘S", "另存为"),
-        ("⌘T", "贴到桌面"),
-        ("⌘R", "识别文字"),
-        ("⌘L", "长截图"),
-        ("⌘Z / ⇧⌘Z", "撤销 / 重做"),
-        ("Esc", "取消"),
+        ("Enter / ⌘C", String(localized: "完成并复制")),
+        ("⌘S", String(localized: "另存为")),
+        ("⌘T", String(localized: "贴到桌面")),
+        ("⌘R", String(localized: "识别文字")),
+        ("⌘L", String(localized: "长截图")),
+        ("⌘Z / ⇧⌘Z", String(localized: "撤销 / 重做")),
+        ("Esc", String(localized: "取消")),
     ]
 }
 
@@ -302,17 +289,17 @@ private struct OutputPane: View {
             PaneHeader(pane: .output)
 
             Section {
-                IconRow(symbol: "doc.on.doc.fill", tint: .blue, title: "自动复制到剪贴板",
-                        detail: "同时写入 PNG 和 TIFF，粘贴到任何 App 都清晰。") {
+                SettingRow(title: String(localized: "自动复制到剪贴板"),
+                        detail: String(localized: "同时写入 PNG 和 TIFF，粘贴到任何 App 都清晰。")) {
                     Toggle("", isOn: $autoCopy).labelsHidden().toggleStyle(.switch)
                 }
-                IconRow(symbol: "externaldrive.fill", tint: .indigo, title: "自动保存到文件") {
+                SettingRow(title: String(localized: "自动保存到文件")) {
                     Toggle("", isOn: $autoSave).labelsHidden().toggleStyle(.switch)
                 }
             }
 
             Section {
-                LabeledContent("保存位置") {
+                LabeledContent(String(localized: "保存位置")) {
                     HStack(spacing: 6) {
                         Image(systemName: "folder.fill")
                             .foregroundStyle(.blue)
@@ -320,26 +307,26 @@ private struct OutputPane: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .help(saveDirectory.path)
-                        Button("更改…", action: chooseDirectory)
+                        Button(String(localized: "更改…"), action: chooseDirectory)
                         Button {
                             if let url = try? Preferences.ensureSaveDirectory() { NSWorkspace.shared.open(url) }
                         } label: {
                             Image(systemName: "arrow.up.forward.app")
                         }
                         .buttonStyle(.borderless)
-                        .help("在访达中打开")
+                        .help(String(localized: "在访达中打开"))
                     }
                 }
-                Picker("格式", selection: $formatRaw) {
+                Picker(String(localized: "格式"), selection: $formatRaw) {
                     Text("PNG").tag(ImageFormat.png.rawValue)
                     Text("JPG").tag(ImageFormat.jpg.rawValue)
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
             } header: {
-                Text("保存")
+                Text(String(localized: "保存"))
             } footer: {
-                Text("文件名形如「截图 2026-01-01 12.00.00.png」。JPG 质量 90%；开启圆角与阴影时始终保存为 PNG。")
+                Text(String(localized: "文件名形如「截图 2026-01-01 12.00.00.png」。JPG 质量 90%；开启圆角与阴影时始终保存为 PNG。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -353,8 +340,8 @@ private struct OutputPane: View {
 
     private func chooseDirectory() {
         let panel = NSOpenPanel()
-        panel.title = "选择保存位置"
-        panel.prompt = "选择"
+        panel.title = String(localized: "选择保存位置")
+        panel.prompt = String(localized: "选择")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
@@ -386,16 +373,16 @@ private struct EffectsPane: View {
             }
 
             Section {
-                IconRow(symbol: "sparkles", tint: .purple, title: "给截图加圆角和阴影",
-                        detail: "复制、保存的是四周透明的 PNG；贴图和截图历史保留原图。") {
+                SettingRow(title: String(localized: "给截图加圆角和阴影"),
+                        detail: String(localized: "复制、保存的是四周透明的 PNG；贴图和截图历史保留原图。")) {
                     Toggle("", isOn: $enabled.animation(.easeInOut(duration: 0.2))).labelsHidden().toggleStyle(.switch)
                 }
-                SliderRow(title: "圆角", value: $cornerPercent, range: ImageDecoration.cornerRange, step: 1,
+                SliderRow(title: String(localized: "圆角"), value: $cornerPercent, range: ImageDecoration.cornerRange, step: 1,
                           format: { "\(Int($0))%" })
-                SliderRow(title: "阴影", value: $shadowLength, range: ImageDecoration.shadowRange, step: 2,
+                SliderRow(title: String(localized: "阴影"), value: $shadowLength, range: ImageDecoration.shadowRange, step: 2,
                           format: { "\(Int($0)) pt" })
             } footer: {
-                Text("圆角按截图短边的百分比计算，截图越大圆角越大。")
+                Text(String(localized: "圆角按截图短边的百分比计算，截图越大圆角越大。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -479,7 +466,7 @@ private struct AboutPane: View {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "—"
         let build = info?["CFBundleVersion"] as? String ?? "—"
-        return "版本 \(short)（\(build)）"
+        return String(localized: "版本 \(short)（\(build)）")
     }
 
     var body: some View {
@@ -499,19 +486,19 @@ private struct AboutPane: View {
                 .padding(.vertical, 10)
             }
 
-            Section("权限") {
-                IconRow(symbol: "rectangle.dashed.badge.record", tint: .red, title: "屏幕录制",
-                        detail: "截图必需。截图只保存在你的电脑上，不会上传。") {
+            Section(String(localized: "权限")) {
+                SettingRow(title: String(localized: "屏幕录制"),
+                        detail: String(localized: "截图必需。截图只保存在你的电脑上，不会上传。")) {
                     if hasScreenRecording {
-                        Label("已允许", systemImage: "checkmark.circle.fill")
+                        Label(String(localized: "已允许"), systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     } else {
-                        Button("前往允许") { PermissionChecker.openScreenRecordingSettings() }
+                        Button(String(localized: "前往允许")) { PermissionChecker.openScreenRecordingSettings() }
                     }
                 }
-                IconRow(symbol: "hand.raised.fill", tint: .blue, title: "辅助功能",
-                        detail: "不需要。SnapMark 不读取键盘输入，也不控制其他 App。") {
-                    Text("不需要")
+                SettingRow(title: String(localized: "辅助功能"),
+                        detail: String(localized: "不需要。SnapMark 不读取键盘输入，也不控制其他 App。")) {
+                    Text(String(localized: "不需要"))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -527,7 +514,7 @@ private struct AboutPane: View {
 /// 用 AppKit 窗口承载 SwiftUI 设置界面：透明标题栏，侧边栏延伸到顶部。
 @MainActor
 final class SettingsWindowController {
-    static let size = CGSize(width: 720, height: 560)
+    static let size = CGSize(width: 740, height: 560)
 
     var openHistory: () -> Void = {}
     private var window: NSWindow?
@@ -541,15 +528,14 @@ final class SettingsWindowController {
                 window = makeWindow(rootView: rootView)
             }
         }
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        window?.bringToFront()
     }
 
     private func makeWindow(rootView: SettingsView) -> NSWindow {
         let hosting = NSHostingController(rootView: rootView)
         hosting.sizingOptions = [.preferredContentSize]
         let window = NSWindow(contentViewController: hosting)
-        window.title = "SnapMark 设置"
+        window.title = String(localized: "SnapMark 设置")
         window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden

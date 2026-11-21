@@ -66,7 +66,7 @@ final class StylePanelView: NSView {
         self.tool = tool
         self.style = style
 
-        let sizeNames = tool == .text ? ["小号字", "中号字", "大号字"] : ["细", "中", "粗"]
+        let sizeNames = tool == .text ? [String(localized: "小号字"), String(localized: "中号字"), String(localized: "大号字")] : [String(localized: "细"), String(localized: "中"), String(localized: "粗")]
         var x = Self.padding
         for (index, button) in sizeButtons.enumerated() {
             button.kind = .size(SizeLevel(rawValue: index)!)

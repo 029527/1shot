@@ -93,7 +93,7 @@ final class LongScreenshotController {
         let scale = scale
         teardown()
         guard let image = stitcher?.makeImage() else {
-            Toast.shared.show("长截图没有截到内容", near: region)
+            Toast.shared.show(String(localized: "长截图没有截到内容"), near: region)
             return
         }
         Log.capture.notice("长截图完成：\(image.width, privacy: .public) × \(image.height, privacy: .public) px")
@@ -141,7 +141,7 @@ final class LongScreenshotController {
         let panel = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 200, height: 260),
                             styleMask: [.titled, .nonactivatingPanel, .utilityWindow, .fullSizeContentView],
                             backing: .buffered, defer: false)
-        panel.title = "长截图"
+        panel.title = String(localized: "长截图")
         panel.titlebarAppearsTransparent = true
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
@@ -178,10 +178,10 @@ final class LongScreenshotState: ObservableObject {
 
         var text: String {
             switch self {
-            case .waiting: return "请向下滚动要截取的内容"
-            case .scrolling: return "继续滚动，完成后点「完成」"
-            case .tooFast: return "滚动太快了，请慢一点"
-            case .full: return "已达到最大高度"
+            case .waiting: return String(localized: "请向下滚动要截取的内容")
+            case .scrolling: return String(localized: "继续滚动，完成后点「完成」")
+            case .tooFast: return String(localized: "滚动太快了，请慢一点")
+            case .full: return String(localized: "已达到最大高度")
             }
         }
     }
@@ -220,21 +220,21 @@ private struct LongScreenshotPanelView: View {
             }
             .frame(height: 110)
 
-            Text(verbatim: "已拼接 \(state.height) px")
+            Text(verbatim: String(localized: "已拼接 \(String(state.height)) px"))
                 .font(.system(.callout, design: .monospaced))
             Text(state.status.text)
                 .font(.caption)
                 .foregroundStyle(state.status == .tooFast ? Color.orange : Color.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("再按截图快捷键也可以完成")
+            Text(String(localized: "再按截图快捷键也可以完成"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 
             HStack {
-                Button("取消", action: onCancel)
+                Button(String(localized: "取消"), action: onCancel)
                 Spacer()
-                Button("完成", action: onFinish)
+                Button(String(localized: "完成"), action: onFinish)
                     .keyboardShortcut(.defaultAction)
             }
         }

@@ -172,7 +172,7 @@ final class MagnifierView: NSView {
             .font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.white.withAlphaComponent(0.6),
         ]
 
-        let coordinate = "坐标 (\(Int(content.pixel.x)), \(Int(content.pixel.y)))"
+        let coordinate = String(localized: "坐标 (\(String(Int(content.pixel.x))), \(String(Int(content.pixel.y))))")
         (coordinate as NSString).draw(at: CGPoint(x: 8, y: 36), withAttributes: primary)
 
         let swatch = CGRect(x: 8, y: 21, width: 11, height: 11)
@@ -183,7 +183,7 @@ final class MagnifierView: NSView {
         (content.sample.center.string(in: content.format) as NSString)
             .draw(at: CGPoint(x: 24, y: 19), withAttributes: primary)
 
-        let hint = content.feedback ?? "C 复制颜色  ⇧ 切换格式"
+        let hint = content.feedback ?? String(localized: "C 复制颜色  ⇧ 切换格式")
         (hint as NSString).draw(at: CGPoint(x: 8, y: 4), withAttributes: secondary)
     }
 }

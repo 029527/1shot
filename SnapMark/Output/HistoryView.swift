@@ -16,9 +16,9 @@ struct HistoryView: View {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 40))
                         .foregroundStyle(.tertiary)
-                    Text("还没有截图历史")
+                    Text(String(localized: "还没有截图历史"))
                         .foregroundStyle(.secondary)
-                    Text("完成、另存为、贴图和长截图都会记录在这里（最多 \(store.limit) 条）。")
+                    Text(String(localized: "完成、另存为、贴图和长截图都会记录在这里（最多 \(store.limit) 条）。"))
                         .font(.callout)
                         .foregroundStyle(.tertiary)
                 }
@@ -41,7 +41,7 @@ struct HistoryView: View {
         .frame(minWidth: 520, minHeight: 360)
         .toolbar {
             SwiftUI.ToolbarItem(placement: .automatic) {
-                Button("清空历史", role: .destructive) { confirmClear() }
+                Button(String(localized: "清空历史"), role: .destructive) { confirmClear() }
                     .disabled(store.items.isEmpty)
             }
         }
@@ -63,10 +63,10 @@ struct HistoryView: View {
 
     private func confirmClear() {
         let alert = NSAlert()
-        alert.messageText = "清空全部截图历史？"
-        alert.informativeText = "将删除 \(store.items.count) 张历史截图，不影响保存目录里的文件。此操作无法撤销。"
-        alert.addButton(withTitle: "清空")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = String(localized: "清空全部截图历史？")
+        alert.informativeText = String(localized: "将删除 \(store.items.count) 张历史截图，不影响保存目录里的文件。此操作无法撤销。")
+        alert.addButton(withTitle: String(localized: "清空"))
+        alert.addButton(withTitle: String(localized: "取消"))
         alert.buttons.first?.hasDestructiveAction = true
         if alert.runModal() == .alertFirstButtonReturn {
             store.removeAll()
@@ -89,7 +89,8 @@ private struct HistoryCard: View {
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_Hans")
-        formatter.dateFormat = "M月d日 HH:mm:ss"
+        // 按当前语言的习惯排列（中文「11月22日 05:01:02」，英文「Nov 22, 05:01:02」）。
+        formatter.setLocalizedDateFormatFromTemplate("MMMdHHmmss")
         return formatter
     }()
 
@@ -105,7 +106,7 @@ private struct HistoryCard: View {
                         .padding(4)
                 }
                 if copied {
-                    Text("已复制")
+                    Text(String(localized: "已复制"))
                         .font(.callout.weight(.medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -126,10 +127,10 @@ private struct HistoryCard: View {
                         .monospacedDigit()
                 }
                 Spacer()
-                iconButton("doc.on.doc", "复制（双击缩略图也可以）", onCopy)
-                iconButton("pin", "贴图到桌面", onPin)
-                iconButton("folder", "在访达中显示", onReveal)
-                iconButton("trash", "删除", onDelete)
+                iconButton("doc.on.doc", String(localized: "复制（双击缩略图也可以）"), onCopy)
+                iconButton("pin", String(localized: "贴图到桌面"), onPin)
+                iconButton("folder", String(localized: "在访达中显示"), onReveal)
+                iconButton("trash", String(localized: "删除"), onDelete)
             }
         }
         .padding(8)
@@ -137,11 +138,11 @@ private struct HistoryCard: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor.opacity(hovering ? 0.6 : 0), lineWidth: 1.5))
         .onHover { hovering = $0 }
         .contextMenu {
-            Button("复制", action: onCopy)
-            Button("贴图到桌面", action: onPin)
-            Button("在访达中显示", action: onReveal)
+            Button(String(localized: "复制"), action: onCopy)
+            Button(String(localized: "贴图到桌面"), action: onPin)
+            Button(String(localized: "在访达中显示"), action: onReveal)
             Divider()
-            Button("删除", role: .destructive, action: onDelete)
+            Button(String(localized: "删除"), role: .destructive, action: onDelete)
         }
         .task(id: item.id) {
             thumbnail = await Self.loadThumbnail(url)
@@ -180,14 +181,13 @@ final class HistoryWindowController {
         if window == nil {
             let hosting = NSHostingController(rootView: HistoryView(store: .shared))
             let window = NSWindow(contentViewController: hosting)
-            window.title = "截图历史"
+            window.title = String(localized: "截图历史")
             window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
             window.setContentSize(CGSize(width: 760, height: 540))
             window.isReleasedWhenClosed = false
             window.center()
             self.window = window
         }
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        window?.bringToFront()
     }
 }

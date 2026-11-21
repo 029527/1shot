@@ -23,7 +23,7 @@ enum QuickPin {
             ?? OutputPipeline.lastCapture.map(PinContent.capture)
             ?? latestHistory()
         guard let content else {
-            Toast.shared.show("剪贴板里没有可以贴的图片或文字", near: mouseAnchor())
+            Toast.shared.show(String(localized: "剪贴板里没有可以贴的图片或文字"), near: mouseAnchor())
             return
         }
         pin(content)

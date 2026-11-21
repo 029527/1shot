@@ -9,7 +9,7 @@ enum FileNamer {
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.timeZone = timeZone
         formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
-        return "截图 \(formatter.string(from: date))"
+        return String(localized: "截图 \(formatter.string(from: date))")
     }
 
     static func fileName(for date: Date, fileExtension: String, timeZone: TimeZone = .current) -> String {

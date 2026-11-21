@@ -30,22 +30,22 @@ enum ToolbarItem: CaseIterable, Hashable {
 
     var title: String {
         switch self {
-        case .rectangle: return "矩形"
-        case .ellipse: return "椭圆"
-        case .arrow: return "箭头"
-        case .pen: return "画笔"
-        case .highlighter: return "荧光笔"
-        case .counter: return "序号"
-        case .text: return "文字"
-        case .mosaic: return "马赛克"
-        case .longScreenshot: return "长截图"
-        case .ocr: return "识别文字"
-        case .pin: return "贴图到桌面"
-        case .undo: return "撤销"
-        case .redo: return "重做"
-        case .save: return "保存"
-        case .cancel: return "取消"
-        case .done: return "完成"
+        case .rectangle: return String(localized: "矩形")
+        case .ellipse: return String(localized: "椭圆")
+        case .arrow: return String(localized: "箭头")
+        case .pen: return String(localized: "画笔")
+        case .highlighter: return String(localized: "荧光笔")
+        case .counter: return String(localized: "序号")
+        case .text: return String(localized: "文字")
+        case .mosaic: return String(localized: "马赛克")
+        case .longScreenshot: return String(localized: "长截图")
+        case .ocr: return String(localized: "识别文字")
+        case .pin: return String(localized: "贴图到桌面")
+        case .undo: return String(localized: "撤销")
+        case .redo: return String(localized: "重做")
+        case .save: return String(localized: "保存")
+        case .cancel: return String(localized: "取消")
+        case .done: return String(localized: "完成")
         }
     }
 
@@ -71,7 +71,7 @@ enum ToolbarItem: CaseIterable, Hashable {
         }
     }
 
-    var toolTip: String { "\(title)（\(shortcutHint)）" }
+    var toolTip: String { String(localized: "\(title)（\(shortcutHint)）") }
 
     var isDrawingTool: Bool {
         switch self {

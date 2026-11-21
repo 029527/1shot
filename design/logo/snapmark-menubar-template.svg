@@ -1,8 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="18" height="18" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="47 47 163 163" width="16" height="16" role="img" aria-labelledby="title">
   <title id="title">SnapMark menu bar icon (template)</title>
-  <!-- 菜单栏模板图标：小尺寸版，单色黑，系统自动适配深浅色 -->
-  <g transform="translate(-1 -1)">
-    <path fill="#000" d="M202 124 V77 A35 35 0 0 0 167 42 H77 A35 35 0 0 0 42 77 V167 A35 35 0 0 0 77 202 H124 A15 15 0 0 0 124 172 H77 A5 5 0 0 1 72 167 V77 A5 5 0 0 1 77 72 H167 A5 5 0 0 1 172 77 V124 A15 15 0 0 0 202 124 Z"/>
-    <path fill="#000" d="M184 152 A32 32 0 1 1 184 216 A32 32 0 1 1 184 152 Z"/>
+  <!-- 菜单栏模板图标：主标志几何（线条较细），单色黑，系统自动适配深浅色。
+       viewBox 贴着图形（没有留白），16 × 16 pt：菜单栏按钮会按自身高度缩放图片，留白会让图形显得偏小。 -->
+  <g transform="translate(3 3)">
+    <path fill="#000" d="M199 136 V80 A35 35 0 0 0 164 45 H80 A35 35 0 0 0 45 80 V164 A35 35 0 0 0 80 199 H136 A11 11 0 0 0 136 177 H80 A13 13 0 0 1 67 164 V80 A13 13 0 0 1 80 67 H164 A13 13 0 0 1 177 80 V136 A11 11 0 0 0 199 136 Z"/>
+    <path fill="#000" d="M182 158 A24 24 0 1 1 182 206 A24 24 0 1 1 182 158 Z"/>
   </g>
 </svg>

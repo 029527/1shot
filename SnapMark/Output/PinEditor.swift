@@ -26,9 +26,9 @@ final class PinEditor: NSObject {
         self.pin = pin
         super.init()
         toolbar.delegate = self
-        toolbar.setToolTip("关闭贴图", for: .cancel)
-        toolbar.setToolTip("复制并收起工具栏（Enter）", for: .done)
-        toolbar.setToolTip("另存为（⌘S）", for: .save)
+        toolbar.setToolTip(String(localized: "关闭贴图"), for: .cancel)
+        toolbar.setToolTip(String(localized: "复制并收起工具栏（Enter）"), for: .done)
+        toolbar.setToolTip(String(localized: "另存为（⌘S）"), for: .save)
         annotations.onChange = { [weak self] in self?.annotationsChanged() }
         attach()
     }
@@ -301,13 +301,13 @@ final class PinEditor: NSObject {
                 let text = TextRecognizer.layout(lines)
                 Log.app.notice("贴图文字识别：\(lines.count, privacy: .public) 行，\(stopwatch.elapsedMs, format: .fixed(precision: 0), privacy: .public) ms")
                 guard !text.isEmpty else {
-                    Toast.shared.show("没有识别到文字", near: anchor)
+                    Toast.shared.show(String(localized: "没有识别到文字"), near: anchor)
                     return
                 }
                 OCRResultWindowController.copy(text)
                 OCRResultWindowController.shared.show(text: text, near: anchor)
             } catch {
-                Toast.shared.show("文字识别失败：\(error.localizedDescription)", near: anchor)
+                Toast.shared.show(String(localized: "文字识别失败：\(error.localizedDescription)"), near: anchor)
             }
         }
     }
