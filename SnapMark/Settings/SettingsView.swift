@@ -486,8 +486,9 @@ private struct AboutPane: View {
         Form {
             Section {
                 VStack(spacing: 6) {
-                    // App 还没有正式图标，先用与侧边栏一致的图标。
-                    SettingsIcon(symbol: "scissors", tint: Color(red: 0.2, green: 0.47, blue: 0.96), size: 64)
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 80, height: 80)
                     Text("SnapMark")
                         .font(.title2.weight(.semibold))
                     Text(verbatim: version)

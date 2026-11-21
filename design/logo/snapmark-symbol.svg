@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">SnapMark logo</title>
+  <!-- 选区框：中心线 56..188、转角 r24、线宽 22，已转为填充轮廓；右下缺口两端为圆头。
+       拖拽点：圆心 (182,182)、r24。整体外廓 45..206，居中后平移 (+3,+3)。 -->
+  <g id="symbol" transform="translate(3 3)">
+    <path id="frame" fill="#3B4552" d="M199 136 V80 A35 35 0 0 0 164 45 H80 A35 35 0 0 0 45 80 V164 A35 35 0 0 0 80 199 H136 A11 11 0 0 0 136 177 H80 A13 13 0 0 1 67 164 V80 A13 13 0 0 1 80 67 H164 A13 13 0 0 1 177 80 V136 A11 11 0 0 0 199 136 Z"/>
+    <path id="handle" fill="#93A7BB" d="M182 158 A24 24 0 1 1 182 206 A24 24 0 1 1 182 158 Z"/>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="18" height="18" role="img" aria-labelledby="title">
+  <title id="title">SnapMark menu bar icon (template)</title>
+  <!-- 菜单栏模板图标：小尺寸版，单色黑，系统自动适配深浅色 -->
+  <g transform="translate(-1 -1)">
+    <path fill="#000" d="M202 124 V77 A35 35 0 0 0 167 42 H77 A35 35 0 0 0 42 77 V167 A35 35 0 0 0 77 202 H124 A15 15 0 0 0 124 172 H77 A5 5 0 0 1 72 167 V77 A5 5 0 0 1 77 72 H167 A5 5 0 0 1 172 77 V124 A15 15 0 0 0 202 124 Z"/>
+    <path fill="#000" d="M184 152 A32 32 0 1 1 184 216 A32 32 0 1 1 184 152 Z"/>
+  </g>
+</svg>

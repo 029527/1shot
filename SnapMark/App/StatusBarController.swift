@@ -22,8 +22,9 @@ final class StatusBarController: NSObject {
         super.init()
 
         if let button = statusItem.button {
-            let image = NSImage(systemSymbolName: "scissors", accessibilityDescription: "SnapMark")
+            let image = NSImage(named: "MenuBarIcon")
             image?.isTemplate = true
+            image?.accessibilityDescription = "SnapMark"
             button.image = image
             button.toolTip = "SnapMark 截图"
         }
