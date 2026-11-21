@@ -160,12 +160,12 @@ final class AnnotationController {
     func configureStylePanel(in host: NSView) -> Bool {
         let panelTool: AnnotationTool
         let panelStyle: ToolStyle
-        if let tool {
-            panelTool = tool
-            panelStyle = styles.style(for: tool)
-        } else if let shape = selectedShape {
+        if let shape = selectedShape {
             panelTool = shape.tool
             panelStyle = shape.style
+        } else if let tool {
+            panelTool = tool
+            panelStyle = styles.style(for: tool)
         } else {
             stylePanel.isHidden = true
             return false
@@ -198,10 +198,38 @@ final class AnnotationController {
         }
         if tool == .watermark {
             watermarkSnapshot = document.snapshot
-            if let style = currentStyle { applyWatermark(style) }
+            if let existing = currentWatermark {
+                // 已有水印：属性条显示它的文字、不透明度、颜色，直接修改它。
+                var style = styles.style(for: .watermark)
+                style.colorIndex = existing.style.colorIndex
+                style.options.text = existing.text
+                style.options.amount = existing.opacity
+                styles.setStyle(style, for: .watermark)
+            } else if let style = currentStyle {
+                applyWatermark(style)
+            }
         }
         onChange?()
     }
+
+    /// 选着某个工具时可以点选的已有标注：同一种工具画的（最上层优先）。
+    /// 马赛克画笔例外：在已有马赛克上继续涂抹很常见，不拦截。
+    func editableShape(at point: CGPoint, for tool: AnnotationTool) -> (any AnnotationShape)? {
+        if tool == .mosaic, currentStyle?.options.mosaicMode == .brush { return nil }
+        return document.shapes.last { shape in
+            guard shape.tool == tool, shape.hitTest(point, tolerance: 4) else { return false }
+            if tool == .mosaic, let mosaic = shape as? MosaicShape, case .stroke = mosaic.region { return false }
+            return true
+        }
+    }
+
+    #if DEBUG
+    /// 测试用：直接放入一个图形（记撤销）。
+    func debugAppend(_ shape: any AnnotationShape) {
+        document.add(shape)
+        syncCanvas()
+    }
+    #endif
 
     // MARK: 水印（整张图一个）
 
@@ -259,6 +287,29 @@ final class AnnotationController {
         guard let tool, selection.contains(point), let style = currentStyle else { return false }
         // 水印作用于整张图，点击画布不做事（也不让遮罩开始重新框选）。
         if tool.isDocumentLevel { return true }
+
+        // 选中的标注的控制点：拖动改大小。
+        if let shape = selectedShape, let index = handleIndex(of: shape, at: point) {
+            editDrag = EditDrag(start: point, original: shape, handle: index, snapshot: document.snapshot)
+            return true
+        }
+        // 点中同类的已有标注：选中它再编辑，而不是再画一个。
+        if let hit = editableShape(at: point, for: tool) {
+            if tool == .text, hit is TextShape {
+                return reeditText(at: point)
+            }
+            selectedShapeID = hit.id
+            editDrag = EditDrag(start: point, original: hit, handle: nil, snapshot: document.snapshot)
+            syncCanvas()
+            onChange?()
+            return true
+        }
+        // 点在空白处：取消选中，开始画新的。
+        if selectedShapeID != nil {
+            selectedShapeID = nil
+            syncCanvas()
+            onChange?()
+        }
 
         if tool == .text {
             if let host = canvas.superview?.superview as? AnnotationHost {
@@ -380,7 +431,7 @@ final class AnnotationController {
 
     /// 双击文字：重新编辑。
     func reeditText(at point: CGPoint) -> Bool {
-        guard tool == nil, let text = document.shape(at: point, tolerance: 4) as? TextShape,
+        guard tool == nil || tool == .text, let text = document.shape(at: point, tolerance: 4) as? TextShape,
               let host = canvas.superview?.superview as? AnnotationHost else { return false }
         editDrag = nil
         textEditSnapshot = document.snapshot
@@ -395,9 +446,13 @@ final class AnnotationController {
 
     /// 没有选中工具时的光标：控制点 → 十字，图形上 → 手形。
     func editCursor(at point: CGPoint) -> NSCursor? {
-        guard tool == nil else { return nil }
         if let drag = editDrag { return drag.handle == nil ? .closedHand : .crosshair }
         if let shape = selectedShape, handleIndex(of: shape, at: point) != nil { return .crosshair }
+        if let tool {
+            // 选着工具：悬停在同类标注上提示可以选中（文字显示 I 形光标）。
+            guard let hit = editableShape(at: point, for: tool) else { return nil }
+            return hit is TextShape ? .iBeam : .openHand
+        }
         if document.shape(at: point, tolerance: 4) != nil { return .openHand }
         return nil
     }
@@ -483,7 +538,7 @@ final class AnnotationController {
 
 extension AnnotationController: StylePanelDelegate {
     func stylePanel(_ panel: StylePanelView, didSelect size: SizeLevel) {
-        if tool == nil, let shape = selectedShape {
+        if let shape = selectedShape {
             var style = shape.style
             style.size = size
             restyleSelected(style)
@@ -497,7 +552,7 @@ extension AnnotationController: StylePanelDelegate {
     }
 
     func stylePanel(_ panel: StylePanelView, didSelectColorAt index: Int) {
-        if tool == nil, let shape = selectedShape {
+        if let shape = selectedShape {
             var style = shape.style
             style.colorIndex = index
             restyleSelected(style)
@@ -512,7 +567,7 @@ extension AnnotationController: StylePanelDelegate {
     }
 
     func stylePanel(_ panel: StylePanelView, didChange options: ToolOptions) {
-        if tool == nil, let shape = selectedShape {
+        if let shape = selectedShape {
             var style = shape.style
             let size = style.size
             style.options = options
@@ -530,7 +585,18 @@ extension AnnotationController: StylePanelDelegate {
 
     private func restyleSelected(_ style: ToolStyle) {
         guard let shape = selectedShape else { return }
-        document.replace(id: shape.id, with: shape.restyled(style))
+        let updated = shape.restyled(style)
+        document.replace(id: shape.id, with: updated)
+        // 选着同一种工具：之后画的也用这个样式。
+        if let tool, tool == shape.tool {
+            var toolStyle = styles.style(for: tool)
+            toolStyle.size = style.size
+            toolStyle.colorIndex = style.colorIndex
+            let text = toolStyle.options.text
+            toolStyle.options = style.options
+            toolStyle.options.text = text
+            styles.setStyle(toolStyle, for: tool)
+        }
         syncCanvas()
         onChange?()
     }

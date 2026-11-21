@@ -150,9 +150,10 @@ final class PinEditor: NSObject {
 
     func cursor(at point: CGPoint) -> NSCursor {
         guard isToolbarVisible else { return .openHand }
+        if let cursor = annotations.editCursor(at: point) { return cursor }
         if annotations.tool == .text { return .iBeam }
         if annotations.tool != nil { return .crosshair }
-        return annotations.editCursor(at: point) ?? .openHand
+        return .openHand
     }
 
     // MARK: 键盘

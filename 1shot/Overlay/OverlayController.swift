@@ -458,6 +458,8 @@ final class OverlayController {
         }
         guard let tool = annotations.tool, let model, let selection = model.selection,
               selection.contains(mouse), model.handle(at: mouse) == nil else { return nil }
+        // 悬停在可以选中的同类标注上：手形（文字为 I 形）。
+        if let local = localPoint(mouse), let cursor = annotations.editCursor(at: local) { return cursor }
         return tool == .text ? .iBeam : .crosshair
     }
 
