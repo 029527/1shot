@@ -77,7 +77,7 @@ curl -fsSL -o "$TMP/$ZIP.sha256" "$BASE/$ZIP.sha256" || fail "下载校验文件
 (cd "$TMP" && shasum -a 256 -c "$ZIP.sha256" >/dev/null) || fail "SHA-256 校验失败，已停止安装。"
 
 ditto -x -k "$TMP/$ZIP" "$TMP/unpacked"
-[[ -d "$TMP/unpacked/$APP_NAME" ]] || fail "安装包里没有 $APP_NAME。"
+[[ -d "$TMP/unpacked/$APP_NAME" ]] || fail "安装包里没有 ${APP_NAME}。"
 codesign --verify --deep --strict "$TMP/unpacked/$APP_NAME" || fail "代码签名校验失败。"
 
 DEST="/Applications"

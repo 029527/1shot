@@ -36,7 +36,7 @@ fi
 rm -rf "$BUILD_DIR" "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-echo "==> 构建 1shot $VERSION（arm64 + x86_64）"
+echo "==> 构建 1shot ${VERSION}（arm64 + x86_64）"
 xcodebuild -project 1shot.xcodeproj -scheme 1shot -configuration Release \
     -derivedDataPath "$BUILD_DIR" -destination 'generic/platform=macOS' \
     ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
