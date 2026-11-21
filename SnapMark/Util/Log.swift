@@ -3,7 +3,7 @@ import OSLog
 import QuartzCore
 
 /// 统一的日志入口。查看方式：
-/// `log stream --predicate 'subsystem == "com.snapmark.SnapMark"'`
+/// `/usr/bin/log stream --predicate 'subsystem == "com.snapmark.SnapMark"'`
 enum Log {
     static let subsystem = "com.snapmark.SnapMark"
 
