@@ -238,8 +238,32 @@ final class OverlayController {
         OutputPipeline.recordHistory(image, scale: scale)
     }
 
-    /// 识别选区里的文字（Vision）。
-    func recognizeText() {}
+    /// 识别选区里的文字（Vision）：用不含标注的原始截图识别，结果自动复制并显示在可编辑的窗口里。
+    func recognizeText() {
+        commitPendingEdits()
+        guard let (image, anchor, _) = composeImage(includeAnnotations: false) else { return }
+        model?.finish()
+        hidePanels()
+        endSession()
+
+        let stopwatch = Stopwatch()
+        Task { @MainActor in
+            do {
+                let lines = try await TextRecognizer.recognize(image)
+                let text = TextRecognizer.layout(lines)
+                Log.app.notice("文字识别：\(lines.count, privacy: .public) 行，\(stopwatch.elapsedMs, format: .fixed(precision: 0), privacy: .public) ms")
+                guard !text.isEmpty else {
+                    Toast.shared.show("没有识别到文字", near: anchor)
+                    return
+                }
+                OCRResultWindowController.copy(text)
+                OCRResultWindowController.shared.show(text: text, near: anchor)
+            } catch {
+                Log.app.error("文字识别失败：\(error.localizedDescription, privacy: .public)")
+                Toast.shared.show("文字识别失败", near: anchor)
+            }
+        }
+    }
 
     /// 长截图：关闭遮罩，在选区位置滚动拼接。
     func startLongScreenshot() {}
