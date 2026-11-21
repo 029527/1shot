@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.pinClipboard()
         }
 
+        settingsWindow.openHistory = { [weak self] in self?.historyWindow.show() }
         overlay.captureService = captureService
         overlay.onDismiss = { [weak self] in
             self?.isCapturing = false

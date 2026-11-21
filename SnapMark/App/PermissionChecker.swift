@@ -11,6 +11,12 @@ enum PermissionChecker {
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
     )!
 
+    /// 打开「系统设置 › 隐私与安全性 › 屏幕录制」。
+    static func openScreenRecordingSettings() {
+        _ = CGRequestScreenCaptureAccess()
+        NSWorkspace.shared.open(screenRecordingSettingsURL)
+    }
+
     /// 弹窗说明原因，按钮直接打开「系统设置 › 隐私与安全性 › 屏幕录制」。
     @MainActor
     static func presentScreenRecordingAlert() {
@@ -30,8 +36,7 @@ enum PermissionChecker {
 
         if alert.runModal() == .alertFirstButtonReturn {
             // 让 SnapMark 出现在「屏幕录制」列表里（首次调用时系统也可能弹出自己的提示）。
-            _ = CGRequestScreenCaptureAccess()
-            NSWorkspace.shared.open(screenRecordingSettingsURL)
+            openScreenRecordingSettings()
         }
     }
 }
