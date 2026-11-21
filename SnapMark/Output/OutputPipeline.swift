@@ -1,13 +1,14 @@
 import AppKit
 
-/// 完成截图后的输出：剪贴板、自动保存、另存为、完成提示。
+/// 完成截图后的输出：剪贴板、自动保存、另存为、截图历史、完成提示。
 @MainActor
 enum OutputPipeline {
     /// 完成（Enter / 双击 / ✓ / ⌘C）：按设置复制、保存，然后在选区附近提示。
-    /// 编码在后台进行，不阻塞遮罩关闭。
-    static func deliver(_ image: CGImage, anchor: CGRect) {
+    /// 编码在后台进行，不阻塞遮罩关闭。`scale` 为截图所在屏幕的 scale（写入历史）。
+    static func deliver(_ image: CGImage, anchor: CGRect, scale: CGFloat) {
         let copy = Preferences.autoCopy
         let save = Preferences.autoSave
+        let keepHistory = Preferences.keepHistory
         let format = Preferences.imageFormat
         let directory = Preferences.saveDirectory
         let showToast = Preferences.showToast
@@ -15,7 +16,8 @@ enum OutputPipeline {
         let stopwatch = Stopwatch()
 
         Task.detached(priority: .userInitiated) {
-            let png = (copy || (save && format == .png)) ? ImageEncoder.data(for: image, format: .png) : nil
+            let needsPNG = copy || keepHistory || (save && format == .png)
+            let png = needsPNG ? ImageEncoder.data(for: image, format: .png) : nil
 
             if copy {
                 let tiff = ImageEncoder.tiffData(for: image)
@@ -39,6 +41,9 @@ enum OutputPipeline {
 
             let finalError = saveError
             await MainActor.run {
+                if keepHistory, let png {
+                    addToHistory(png: png, image: image, scale: scale, date: date)
+                }
                 if let saveError = finalError {
                     Toast.shared.show("保存失败：\(saveError.localizedDescription)", near: anchor)
                     return
@@ -58,9 +63,34 @@ enum OutputPipeline {
         }
     }
 
+    /// 只记入截图历史（贴图时用），编码在后台进行。
+    static func recordHistory(_ image: CGImage, scale: CGFloat) {
+        guard Preferences.keepHistory else { return }
+        let date = Date()
+        Task.detached(priority: .utility) {
+            guard let png = ImageEncoder.data(for: image, format: .png) else { return }
+            await MainActor.run {
+                addToHistory(png: png, image: image, scale: scale, date: date)
+            }
+        }
+    }
+
+    private static func addToHistory(png: Data, image: CGImage, scale: CGFloat, date: Date) {
+        do {
+            try HistoryStore.shared.add(pngData: png, width: image.width, height: image.height,
+                                        scale: Double(scale), date: date)
+        } catch {
+            Log.app.error("写入截图历史失败：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// 另存为（工具栏「保存」/ ⌘S）：同时复制到剪贴板，然后弹出 NSSavePanel。
-    static func saveAs(_ image: CGImage, anchor: CGRect, completion: @escaping () -> Void) {
-        PasteboardWriter.write(image)
+    static func saveAs(_ image: CGImage, anchor: CGRect, scale: CGFloat, completion: @escaping () -> Void) {
+        let png = ImageEncoder.data(for: image, format: .png)
+        PasteboardWriter.write(png: png, tiff: ImageEncoder.tiffData(for: image))
+        if Preferences.keepHistory, let png {
+            addToHistory(png: png, image: image, scale: scale, date: Date())
+        }
 
         let format = Preferences.imageFormat
         let panel = NSSavePanel()
@@ -80,7 +110,8 @@ enum OutputPipeline {
                 return
             }
             do {
-                try FileSaver.write(image, format: ImageFormat(fileExtension: url.pathExtension), to: url)
+                let format = ImageFormat(fileExtension: url.pathExtension)
+                try FileSaver.write(image, format: format, to: url, encoded: format == .png ? png : nil)
                 if Preferences.showToast { Toast.shared.show("已复制并保存", near: anchor) }
             } catch {
                 NSAlert(error: error).runModal()

@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let captureService = CaptureService()
     private let overlay = OverlayController()
     private let settingsWindow = SettingsWindowController()
+    private let historyWindow = HistoryWindowController()
     private var statusBar: StatusBarController?
 
     /// 截图流程进行中（从按下快捷键到遮罩关闭）。
@@ -24,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar = StatusBarController(actions: .init(
             capture: { [weak self] in self?.startCapture() },
             openSaveDirectory: { [weak self] in self?.openSaveDirectory() },
+            openHistory: { [weak self] in self?.historyWindow.show() },
             openSettings: { [weak self] in self?.settingsWindow.show() }
         ))
 

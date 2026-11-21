@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(Preferences.Key.autoSave) private var autoSave = true
     @AppStorage(Preferences.Key.imageFormat) private var formatRaw = ImageFormat.png.rawValue
     @AppStorage(Preferences.Key.showToast) private var showToast = true
+    @AppStorage(Preferences.Key.keepHistory) private var keepHistory = true
 
     @State private var saveDirectory = Preferences.saveDirectory
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
@@ -48,6 +49,7 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
 
                 Toggle("显示完成提示", isOn: $showToast)
+                Toggle("保留截图历史（最近 \(HistoryStore.defaultLimit) 条）", isOn: $keepHistory)
             }
 
             Section("通用") {

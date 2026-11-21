@@ -37,6 +37,7 @@ enum Preferences {
         static let saveDirectory = "saveDirectory"
         static let imageFormat = "imageFormat"
         static let showToast = "showToast"
+        static let keepHistory = "keepHistory"
     }
 
     static var defaults: UserDefaults { .standard }
@@ -47,6 +48,7 @@ enum Preferences {
             Key.autoSave: true,
             Key.imageFormat: ImageFormat.png.rawValue,
             Key.showToast: true,
+            Key.keepHistory: true,
         ])
     }
 
@@ -66,6 +68,12 @@ enum Preferences {
     static var showToast: Bool {
         get { defaults.bool(forKey: Key.showToast) }
         set { defaults.set(newValue, forKey: Key.showToast) }
+    }
+
+    /// 保留截图历史（默认开，最近 50 条）。
+    static var keepHistory: Bool {
+        get { defaults.bool(forKey: Key.keepHistory) }
+        set { defaults.set(newValue, forKey: Key.keepHistory) }
     }
 
     static var imageFormat: ImageFormat {

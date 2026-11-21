@@ -7,6 +7,7 @@ final class StatusBarController: NSObject {
     struct Actions {
         var capture: () -> Void
         var openSaveDirectory: () -> Void
+        var openHistory: () -> Void
         var openSettings: () -> Void
     }
 
@@ -35,6 +36,10 @@ final class StatusBarController: NSObject {
         capture.setShortcut(for: .captureScreen)
         menu.addItem(capture)
 
+        let history = NSMenuItem(title: "截图历史…", action: #selector(historyClicked), keyEquivalent: "")
+        history.target = self
+        menu.addItem(history)
+
         let open = NSMenuItem(title: "打开保存目录", action: #selector(openSaveDirectoryClicked), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
@@ -56,6 +61,10 @@ final class StatusBarController: NSObject {
     @objc private func captureClicked() {
         // 等菜单完全收起后再截图。
         DispatchQueue.main.async { [actions] in actions.capture() }
+    }
+
+    @objc private func historyClicked() {
+        actions.openHistory()
     }
 
     @objc private func openSaveDirectoryClicked() {

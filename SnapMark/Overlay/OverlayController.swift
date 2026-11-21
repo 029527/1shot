@@ -190,36 +190,39 @@ final class OverlayController {
     }
 
     /// 合成最终图片（截图 + 所有标注）。
-    private func composeImage() -> (image: CGImage, anchor: CGRect)? {
+    private func composeImage(includeAnnotations: Bool = true)
+        -> (image: CGImage, anchor: CGRect, scale: CGFloat)? {
         guard let active = activeSelection else { return nil }
         let image = ImageExporter.compose(
             image: active.display.image,
             geometry: active.display.geometry,
             selection: active.local,
-            drawOverlays: { [weak self] context in self?.drawAnnotations(in: context) }
+            drawOverlays: { [weak self] context in
+                if includeAnnotations { self?.drawAnnotations(in: context) }
+            }
         )
         guard let image else { return nil }
-        return (image, active.global)
+        return (image, active.global, active.display.geometry.scale)
     }
 
     /// 完成：合成 → 剪贴板 / 保存 → 关闭遮罩 → 提示。
     func finish() {
         commitPendingEdits()
-        guard let (image, anchor) = composeImage() else { return }
+        guard let (image, anchor, scale) = composeImage() else { return }
         model?.finish()
         Log.overlay.notice("完成：\(image.width, privacy: .public) × \(image.height, privacy: .public) px")
         hidePanels()
         endSession()
-        OutputPipeline.deliver(image, anchor: anchor)
+        OutputPipeline.deliver(image, anchor: anchor, scale: scale)
     }
 
     /// 另存为：关闭遮罩后弹出保存面板，同时复制到剪贴板。
     func saveAs() {
         commitPendingEdits()
-        guard let (image, anchor) = composeImage() else { return }
+        guard let (image, anchor, scale) = composeImage() else { return }
         model?.finish()
         hidePanels()
-        OutputPipeline.saveAs(image, anchor: anchor) { [weak self] in
+        OutputPipeline.saveAs(image, anchor: anchor, scale: scale) { [weak self] in
             self?.endSession()
         }
     }
@@ -227,11 +230,12 @@ final class OverlayController {
     /// 贴图到桌面：在选区原位置置顶显示合成后的图片。
     func pinToDesktop() {
         commitPendingEdits()
-        guard let (image, anchor) = composeImage() else { return }
+        guard let (image, anchor, scale) = composeImage() else { return }
         model?.finish()
         hidePanels()
         endSession()
         PinManager.shared.pin(image, frame: anchor)
+        OutputPipeline.recordHistory(image, scale: scale)
     }
 
     /// 识别选区里的文字（Vision）。
