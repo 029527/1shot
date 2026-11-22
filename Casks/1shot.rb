@@ -1,6 +1,6 @@
 cask "1shot" do
-  version "0.1.0"
-  sha256 "9f4bc868ea741cff09e0a5127a3365bf47ec5baa44750569eda9eb6df5ef826a"
+  version "0.1.1"
+  sha256 "0b5a72d3f11ee6f688503ac77a0a3cca6d1de7732952e18fde269ac846571fd2"
 
   url "https://github.com/029527/1shot/releases/download/v#{version}/1shot-#{version}.zip"
   name "1shot"
