@@ -29,6 +29,16 @@ final class WindowListSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.windows[1].frame, CGRect(x: 50, y: 50, width: 500, height: 500))
     }
 
+    func testKeepsIncludedOwnWindows() {
+        let raw = [
+            entry(id: 1, pid: 999, rect: CGRect(x: 0, y: 0, width: 740, height: 560)), // 自己的设置窗口
+            entry(id: 2, pid: 999, rect: CGRect(x: 0, y: 0, width: 300, height: 200)), // 自己的其他窗口
+            entry(id: 3, pid: 100, rect: CGRect(x: 0, y: 0, width: 300, height: 200)),
+        ]
+        let snapshot = WindowListSnapshot(rawList: raw, excludingPID: 999, includingWindowIDs: [1])
+        XCTAssertEqual(snapshot.windows.map(\.windowID), [1, 3])
+    }
+
     func testTopmostWindowKeepsFrontToBackOrder() {
         let raw = [
             entry(id: 10, pid: 1, rect: CGRect(x: 100, y: 100, width: 100, height: 100)),

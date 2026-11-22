@@ -377,16 +377,19 @@ private struct EffectsPane: View {
                         detail: String(localized: "复制、保存的是四周透明的 PNG；贴图和截图历史保留原图。")) {
                     Toggle("", isOn: $enabled.animation(.easeInOut(duration: 0.2))).labelsHidden().toggleStyle(.switch)
                 }
-                SliderRow(title: String(localized: "圆角"), value: $cornerPercent, range: ImageDecoration.cornerRange, step: 1,
-                          format: { "\(Int($0))%" })
-                SliderRow(title: String(localized: "阴影"), value: $shadowLength, range: ImageDecoration.shadowRange, step: 2,
-                          format: { "\(Int($0)) pt" })
+                // 只禁用滑块：开关本身必须始终可点，否则关闭状态下永远打不开。
+                Group {
+                    SliderRow(title: String(localized: "圆角"), value: $cornerPercent, range: ImageDecoration.cornerRange, step: 1,
+                              format: { "\(Int($0))%" })
+                    SliderRow(title: String(localized: "阴影"), value: $shadowLength, range: ImageDecoration.shadowRange, step: 2,
+                              format: { "\(Int($0)) pt" })
+                }
+                .disabled(!enabled)
             } footer: {
                 Text(String(localized: "圆角按截图短边的百分比计算，截图越大圆角越大。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .disabled(!enabled)
         }
     }
 }

@@ -91,15 +91,22 @@ final class CaptureService {
 
         // 1. 窗口列表：越早越好，代表「按下快捷键那一刻」。
         var stopwatch = Stopwatch()
-        let windows = WindowListSnapshot.capture(excludingPID: getpid())
+        let pid = getpid()
+        let keptOwnWindowIDs = Self.capturableOwnWindowIDs()
+        let windows = WindowListSnapshot.capture(excludingPID: pid, includingWindowIDs: keptOwnWindowIDs)
         timings.windowListMs = stopwatch.elapsedMs
 
         // 2. 显示器信息（通常命中缓存）。
         stopwatch = Stopwatch()
         var content = try await content()
-        if !screens.allSatisfy({ screen in content.displays.contains { $0.displayID == screen.displayID } }) {
-            // 缓存过期（显示器刚变化），强制刷新一次。
-            Log.capture.notice("显示器缓存过期，重新获取")
+        let displaysStale = !screens.allSatisfy { screen in
+            content.displays.contains { $0.displayID == screen.displayID }
+        }
+        // 缓存是启动时取的，之后才打开的设置窗口不在里面，也要刷新才能把它截进去。
+        let cachedWindowIDs = Set(content.windows.map(\.windowID))
+        let windowsStale = !keptOwnWindowIDs.isSubset(of: cachedWindowIDs)
+        if displaysStale || windowsStale {
+            Log.capture.notice("SCShareableContent 缓存过期（显示器：\(displaysStale, privacy: .public)，本 App 窗口：\(windowsStale, privacy: .public)），重新获取")
             cachedContent = nil
             loadingTask = nil
             content = try await self.content()
@@ -107,9 +114,11 @@ final class CaptureService {
         timings.contentMs = stopwatch.elapsedMs
 
         // 3. 每块屏幕并行截图。
-        let pid = getpid()
+        // 排除本 App 的遮罩、提示、贴图等，但保留设置、历史这类普通窗口，让它们也能被截进去。
         let selfApp = content.applications.first { $0.processID == pid }
         let ownWindows = content.windows.filter { $0.owningApplication?.processID == pid }
+        let keptOwnWindows = ownWindows.filter { keptOwnWindowIDs.contains($0.windowID) }
+        let excludedOwnWindows = ownWindows.filter { !keptOwnWindowIDs.contains($0.windowID) }
 
         struct Job {
             let displayID: CGDirectDisplayID
@@ -127,9 +136,10 @@ final class CaptureService {
 
             let filter: SCContentFilter
             if let selfApp {
-                filter = SCContentFilter(display: display, excludingApplications: [selfApp], exceptingWindows: [])
+                filter = SCContentFilter(display: display, excludingApplications: [selfApp],
+                                         exceptingWindows: keptOwnWindows)
             } else {
-                filter = SCContentFilter(display: display, excludingWindows: ownWindows)
+                filter = SCContentFilter(display: display, excludingWindows: excludedOwnWindows)
             }
 
             let geometry = ScreenGeometry(screen: screen)
@@ -179,6 +189,17 @@ final class CaptureService {
         }
 
         return CaptureResult(displays: displays, windows: windows, converter: converter, timings: timings)
+    }
+
+    /// 截图时要保留的本 App 窗口：屏幕上可见的普通层级窗口（设置、截图历史等）。
+    /// 遮罩、完成提示、贴图、长截图边框等都在更高的层级，不会被选中。
+    static func capturableOwnWindowIDs() -> Set<CGWindowID> {
+        Set(NSApp.windows.compactMap { window -> CGWindowID? in
+            guard window.isVisible, window.level == .normal, !window.isMiniaturized,
+                  window.occlusionState.contains(.visible), window.windowNumber > 0
+            else { return nil }
+            return CGWindowID(window.windowNumber)
+        })
     }
 
     /// 截取某块屏幕上的一个区域（长截图用）。`globalRect` 为 AppKit 全局坐标（pt），不含本 App 的窗口。

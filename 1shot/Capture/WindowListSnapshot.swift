@@ -22,17 +22,17 @@ struct WindowListSnapshot: Equatable {
         self.windows = windows
     }
 
-    /// 读取当前屏幕上的窗口列表。
-    static func capture(excludingPID: pid_t) -> WindowListSnapshot {
+    /// 读取当前屏幕上的窗口列表。`excludingPID` 的窗口里，`includingWindowIDs` 中的仍保留（如本 App 的设置窗口）。
+    static func capture(excludingPID: pid_t, includingWindowIDs: Set<CGWindowID> = []) -> WindowListSnapshot {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let raw = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
             return WindowListSnapshot(windows: [])
         }
-        return WindowListSnapshot(rawList: raw, excludingPID: excludingPID)
+        return WindowListSnapshot(rawList: raw, excludingPID: excludingPID, includingWindowIDs: includingWindowIDs)
     }
 
     /// 解析 `CGWindowListCopyWindowInfo` 的原始字典，过滤掉自己、透明和过小的窗口。
-    init(rawList: [[String: Any]], excludingPID: pid_t) {
+    init(rawList: [[String: Any]], excludingPID: pid_t, includingWindowIDs: Set<CGWindowID> = []) {
         var result: [WindowInfo] = []
         result.reserveCapacity(rawList.count)
 
@@ -44,7 +44,7 @@ struct WindowListSnapshot: Equatable {
                 let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary)
             else { continue }
 
-            if pid == excludingPID { continue }
+            if pid == excludingPID && !includingWindowIDs.contains(number) { continue }
 
             let alpha = CGFloat((entry[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1)
             if alpha <= 0.01 { continue }
