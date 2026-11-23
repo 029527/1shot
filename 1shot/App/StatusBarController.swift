@@ -16,11 +16,21 @@ final class StatusBarController: NSObject {
 
     private let statusItem: NSStatusItem
     private let actions: Actions
+    private var visibilityObservation: NSKeyValueObservation?
 
     init(actions: Actions) {
         self.actions = actions
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
+
+        // 允许按住 ⌘ 把图标拖出菜单栏移除。系统按 autosaveName 记住位置和是否隐藏，
+        // 隐藏后再次打开 1shot 会恢复（见 AppDelegate.applicationShouldHandleReopen）。
+        statusItem.autosaveName = "1shotStatusItem"
+        statusItem.behavior = .removalAllowed
+        visibilityObservation = statusItem.observe(\.isVisible, options: [.old, .new]) { [weak self] _, change in
+            guard change.oldValue == true, change.newValue == false else { return }
+            DispatchQueue.main.async { self?.iconWasRemoved() }
+        }
 
         if let button = statusItem.button {
             let image = NSImage(named: "MenuBarIcon")
@@ -30,6 +40,27 @@ final class StatusBarController: NSObject {
             button.toolTip = String(localized: "1shot 截图")
         }
         statusItem.menu = makeMenu()
+    }
+
+    /// 恢复被用户拖走的菜单栏图标。
+    func showIcon() {
+        guard !statusItem.isVisible else { return }
+        statusItem.isVisible = true
+        Log.app.notice("菜单栏图标已恢复")
+    }
+
+    /// 用户把图标拖出了菜单栏：告诉他们快捷键仍可用，以及怎么找回图标。
+    private func iconWasRemoved() {
+        Log.app.notice("用户移除了菜单栏图标")
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = String(localized: "菜单栏图标已隐藏")
+        alert.informativeText = String(localized: "1shot 仍在后台运行，截图快捷键照常可用。要恢复图标，在启动台或「应用程序」文件夹里再次打开 1shot。")
+        alert.addButton(withTitle: String(localized: "好"))
+        alert.addButton(withTitle: String(localized: "恢复图标"))
+        if alert.runModal() == .alertSecondButtonReturn {
+            showIcon()
+        }
     }
 
     private func makeMenu() -> NSMenu {

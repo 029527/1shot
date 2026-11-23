@@ -41,6 +41,16 @@
         }
       }
     },
+    "1shot 仍在后台运行，截图快捷键照常可用。要恢复图标，在启动台或「应用程序」文件夹里再次打开 1shot。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1shot is still running in the background, and your screenshot shortcuts still work. To bring the icon back, open 1shot again from Launchpad or the Applications folder."
+          }
+        }
+      }
+    },
     "1shot 截图": {
       "localizations": {
         "en": {
@@ -877,6 +887,16 @@
         }
       }
     },
+    "恢复图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Icon"
+          }
+        }
+      }
+    },
     "截图": {
       "localizations": {
         "en": {
@@ -1683,6 +1703,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Highlighter"
+          }
+        }
+      }
+    },
+    "菜单栏图标已隐藏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu Bar Icon Hidden"
           }
         }
       }

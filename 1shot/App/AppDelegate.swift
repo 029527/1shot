@@ -72,6 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.app.notice("1shot 已启动，屏幕录制权限：\(PermissionChecker.hasScreenRecordingAccess, privacy: .public)")
     }
 
+    /// 在启动台、Finder 等处再次打开 1shot：恢复被拖走的菜单栏图标。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        statusBar?.showIcon()
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // 有下载好的更新：退出时替换。
         UpdateService.shared.installOnQuit()
